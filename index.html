@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shigley Ch. 12 — Journal Bearing Selection & Hydrodynamic Solver</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            cad: {
+              bg: '#0b0f17',
+              card: '#111827',
+              surface: '#162032',
+              border: '#1e293b',
+              cyan: '#38bdf8',
+              amber: '#f59e0b',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+              text: '#e2e8f0',
+              muted: '#94a3b8'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Zero animations, transitions, or dynamic frame loops */
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+    body {
+      background-color: #0b0f17;
+      color: #e2e8f0;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    sub {
+      font-size: 74%;
+      line-height: 0;
+      position: relative;
+      vertical-align: baseline;
+      bottom: -0.22em;
+    }
+    .cad-grid {
+      background-image:
+        linear-gradient(to right, rgba(30, 41, 59, 0.45) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(30, 41, 59, 0.45) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    input[type="number"], select {
+      background-color: #0b0f17;
+      border: 1px solid #1e293b;
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    input[type="number"]:focus, select:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0f17;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col text-sm selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- TOP HEADER & SHIGLEY BENCHMARK PRESET BAR -->
+  <header class="bg-cad-card border-b border-cad-border px-4 py-3 sticky top-0 z-30">
+    <div class="max-w-[1640px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+      <!-- Brand / Standard Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/40 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="13.5" cy="13.5" r="5" />
+            <line x1="12" y1="3" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="21" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-base font-bold tracking-tight text-white">JOURNAL BEARING SELECTION & HYDRODYNAMIC SOLVER</h1>
+            <span class="px-2 py-0.5 text-[11px] font-mono font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30 rounded">
+              SHIGLEY 9TH ED. • CH. 12
+            </span>
+          </div>
+          <p class="text-xs text-cad-muted">Raimondi-Boyd Charts • Self-Contained Pillow Block • Pressure-Fed Groove • Boundary Wear & PV</p>
+        </div>
+      </div>
+
+      <!-- Benchmark Presets, Unit Toggle & Export -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-[11px] font-mono uppercase tracking-wider text-cad-muted mr-1">Presets:</span>
+        <button type="button" onclick="loadPreset('si_turbine')" class="px-2.5 py-1.5 text-xs font-mono font-semibold bg-cyan-950/70 hover:bg-cyan-900/70 text-cyan-300 border border-cyan-500/40 rounded">
+          SI Turbine
+        </button>
+        <button type="button" onclick="loadPreset('ex12_1')" class="px-2.5 py-1.5 text-xs font-mono bg-cad-surface hover:bg-sky-950/60 text-sky-300 border border-cad-border hover:border-sky-500/50 rounded">
+          Ex. 12-1..4
+        </button>
+        <button type="button" onclick="loadPreset('ex12_5')" class="px-2.5 py-1.5 text-xs font-mono bg-cad-surface hover:bg-amber-950/50 text-amber-300 border border-cad-border hover:border-amber-500/50 rounded">
+          Ex. 12-5
+        </button>
+        <button type="button" onclick="loadPreset('ex12_6')" class="px-2.5 py-1.5 text-xs font-mono bg-cad-surface hover:bg-emerald-950/50 text-emerald-300 border border-cad-border hover:border-emerald-500/50 rounded">
+          Ex. 12-6
+        </button>
+        <button type="button" onclick="loadPreset('ex12_7')" class="px-2.5 py-1.5 text-xs font-mono bg-cad-surface hover:bg-purple-950/50 text-purple-300 border border-cad-border hover:border-purple-500/50 rounded">
+          Ex. 12-7
+        </button>
+
+        <div class="h-5 w-px bg-cad-border mx-1 hidden sm:block"></div>
+
+        <!-- Global Unit Toggle (SI Default) -->
+        <div class="inline-flex rounded-md border border-cad-border bg-cad-bg p-0.5" role="group">
+          <button type="button" id="btnUnitSI" onclick="setUnitSystem('SI')" class="px-2.5 py-1 text-xs font-mono font-semibold rounded bg-sky-500 text-slate-950">
+            SI (mm, N, °C)
+          </button>
+          <button type="button" id="btnUnitIPS" onclick="setUnitSystem('IPS')" class="px-2.5 py-1 text-xs font-mono font-semibold rounded text-cad-muted hover:text-white">
+            IPS (in, lbf, °F)
+          </button>
+        </div>
+
+        <button type="button" onclick="autoOptimizeBearing()" class="px-2.5 py-1.5 text-xs font-mono font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded">
+          Auto-Optimize
+        </button>
+        <button type="button" onclick="copyReportToClipboard()" class="px-2.5 py-1.5 text-xs font-mono bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 rounded">
+          Copy Report
+        </button>
+        <button type="button" onclick="downloadJSONSpec()" class="px-2.5 py-1.5 text-xs font-mono bg-cad-surface hover:bg-slate-800 text-slate-200 border border-cad-border rounded">
+          JSON
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Benchmark Verification Banner -->
+    <div id="benchmarkBar" class="max-w-[1640px] mx-auto mt-2.5 pt-2 border-t border-cad-border/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+      <div class="flex items-center gap-2">
+        <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">BENCHMARK CHECK</span>
+        <span id="benchmarkText" class="text-slate-300">SI Turbine Preset Active: d = 80 mm, l = 60 mm, W = 6500 N, n = 3000 rpm, SAE 30</span>
+      </div>
+      <span id="benchmarkDelta" class="text-emerald-400 font-semibold">SI METRIC CALIBRATED</span>
+    </div>
+  </header>
+
+  <!-- Non-blocking Status / Clipboard Toast -->
+  <div id="toastBanner" class="hidden bg-sky-950 border-b border-sky-500/40 px-4 py-2 text-xs font-mono text-sky-200">
+    <div class="max-w-[1640px] mx-auto flex items-center justify-between">
+      <span id="toastText">Action completed.</span>
+      <button type="button" onclick="document.getElementById('toastBanner').classList.add('hidden')" class="text-sky-400 hover:text-white">✕</button>
+    </div>
+  </div>
+
+  <!-- FOUR COMPLETE CHAPTER 12 SOLVER MODE TABS -->
+  <nav class="bg-cad-card/80 border-b border-cad-border px-4">
+    <div class="max-w-[1640px] mx-auto flex flex-wrap gap-1 pt-2">
+      <button type="button" id="modeTab_fullfilm" onclick="setSolverMode('fullfilm')" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-t border-t border-x border-cad-border bg-cad-bg text-sky-400">
+        1. Full-Film Hydrodynamic (Raimondi & Boyd)
+      </button>
+      <button type="button" id="modeTab_pillow" onclick="setSolverMode('pillow')" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white">
+        2. Self-Contained Pillow-Block (Eqs. 12-17..20)
+      </button>
+      <button type="button" id="modeTab_groove" onclick="setSolverMode('groove')" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white">
+        3. Pressure-Fed Groove (Eqs. 12-22..25)
+      </button>
+      <button type="button" id="modeTab_boundary" onclick="setSolverMode('boundary')" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white">
+        4. Boundary-Lubricated Bushing (Tables 12-7..11)
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN WORKSPACE GRID -->
+  <main class="flex-1 max-w-[1640px] w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- LEFT COLUMN: INPUT PARAMETERS, ISO FITS & REFERENCE SELECTORS (4 COLS) -->
+    <section class="lg:col-span-4 space-y-4">
+
+      <!-- Card A: Geometry, Load & Kinematics -->
+      <div class="bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-3">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">A. Geometry, Load & Speed</h2>
+          <span id="badgeLD" class="text-[11px] font-mono px-2 py-0.5 rounded bg-cad-surface text-sky-300 border border-cad-border">l/d = 0.750</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Journal Diameter <i>d</i> (<span class="u-len">mm</span>)</label>
+            <input type="number" id="inpD" step="any" value="80" oninput="onGeometryInput()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label id="lblLength" class="block text-[11px] text-cad-muted mb-1">Bearing Length <i>l</i> (<span class="u-len">mm</span>)</label>
+            <input type="number" id="inpL" step="any" value="60" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+
+          <div id="boxRadialClearance">
+            <label class="block text-[11px] text-cad-muted mb-1">Radial Clearance <i>c</i> (<span class="u-len">mm</span>)</label>
+            <input type="number" id="inpC" step="any" value="0.060" oninput="onManualClearanceInput()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div id="boxIsoFit">
+            <label class="block text-[11px] text-cad-muted mb-1">ISO 286-2 Fit Stack-Up</label>
+            <select id="isoFitSelect" onchange="onIsoFitChange()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="manual">Manual <i>c</i> Override</option>
+              <option value="H7/g6">H7/g6 (Precision Location)</option>
+              <option value="H7/f7">H7/f7 (Close Running)</option>
+              <option value="H8/f7">H8/f7 (Close Running Std)</option>
+              <option value="H7/e8">H7/e8 (Easy Running)</option>
+              <option value="H9/d9">H9/d9 (Free Running)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Steady Radial Load <i>W</i> (<span class="u-force">N</span>)</label>
+            <input type="number" id="inpW" step="any" value="6500" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Starting Load <i>W</i><sub>st</sub> (<span class="u-force">N</span>)</label>
+            <input type="number" id="inpWst" step="any" value="6500" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Journal Speed <i>n</i> (rpm)</label>
+            <input type="number" id="inpRPM" step="any" value="3000" oninput="syncSpeed('rpm')" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Speed <i>N</i> (rev/s)</label>
+            <input type="number" id="inpRevS" step="any" value="50" oninput="syncSpeed('revs')" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+        </div>
+
+        <!-- ISO Stack-Up Telemetry Strip -->
+        <div id="isoStackStrip" class="bg-cad-bg border border-cad-border rounded px-2.5 py-1.5 text-[11px] font-mono text-cad-muted flex flex-wrap justify-between gap-2">
+          <span><i>c</i><sub>min</sub>: <strong id="isoCmin" class="text-slate-200">0.0510 mm</strong></span>
+          <span><i>c</i><sub>avg</sub>: <strong id="isoCavg" class="text-sky-300">0.0600 mm</strong></span>
+          <span><i>c</i><sub>max</sub>: <strong id="isoCmax" class="text-slate-200">0.0690 mm</strong></span>
+        </div>
+
+        <!-- Application Unit Load Reference (Table 12-5) -->
+        <div class="pt-1 border-t border-cad-border/70">
+          <label class="block text-[11px] text-cad-muted mb-1">Application Unit Load Norm (Shigley Table 12-5)</label>
+          <select id="appNormSelect" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+            <option value="custom">Custom / Unconstrained Application</option>
+            <option value="centrifugal_pump">Centrifugal Pumps (0.6–1.2 MPa / 100–180 psi)</option>
+            <option value="electric_motor">Electric Motors (0.8–1.5 MPa / 120–250 psi)</option>
+            <option value="steam_turbine">Steam Turbines (0.8–1.5 MPa / 120–250 psi)</option>
+            <option value="gear_reducer">Gear Reducers (0.8–1.5 MPa / 120–250 psi)</option>
+            <option value="air_comp_main">Air Compressors — Main (1–2 MPa / 140–280 psi)</option>
+            <option value="air_comp_crank">Air Compressors — Crankpin (2–4 MPa / 280–500 psi)</option>
+            <option value="auto_main">Automotive Engines — Main (4–5 MPa / 600–750 psi)</option>
+            <option value="diesel_main">Diesel Engines — Main (6–12 MPa / 900–1700 psi)</option>
+            <option value="diesel_crank">Diesel Engines — Crankpin (8–15 MPa / 1150–2300 psi)</option>
+            <option value="auto_crank">Automotive Engines — Crankpin (10–15 MPa / 1700–2300 psi)</option>
+            <option value="diesel_wrist">Diesel Engines — Wristpin (14–15 MPa / 2000–2300 psi)</option>
+          </select>
+          <div id="appNormReadout" class="text-[11px] font-mono text-cad-muted mt-1">Select an application to compare design <i>P</i> against Table 12-5.</div>
+        </div>
+      </div>
+
+      <!-- Card B1: Full-Film Hydrodynamic Controls -->
+      <div id="panel_fullfilm" class="bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-3">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">B. Full-Film Lubricant & Inlet Temp</h2>
+          <span class="text-[11px] font-mono text-cad-muted">Table 12-1 • Fig. 12-24</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Viscosity Calculation</label>
+            <select id="ffViscMode" onchange="onFfViscModeChange()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="iterative" selected>Iterate <i>T</i><sub>av</sub> = <i>T</i><sub>1</sub> + Δ<i>T</i>/2</option>
+              <option value="direct">Fixed Viscosity <i>µ</i> (Ex. 12-1)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">SAE Oil Grade (Table 12-1)</label>
+            <select id="ffOilGrade" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="SAE10">SAE 10</option>
+              <option value="SAE20">SAE 20</option>
+              <option value="SAE30" selected>SAE 30</option>
+              <option value="SAE40">SAE 40</option>
+              <option value="SAE50">SAE 50</option>
+              <option value="SAE60">SAE 60</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="ffDirectViscRow" class="hidden grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Given Viscosity <i>µ</i> (<span class="u-visc">mPa·s</span>)</label>
+            <input type="number" id="inpDirectVisc" step="any" value="27.58" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Inlet Temp <i>T</i><sub>1</sub> (<span class="u-temp">°C</span>)</label>
+            <input type="number" id="inpFfInletDirect" step="any" value="50" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+        </div>
+
+        <div id="ffIterTempRow" class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Inlet Oil Temp <i>T</i><sub>1</sub> (<span class="u-temp">°C</span>)</label>
+            <input type="number" id="inpFfInletIter" step="any" value="50" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Trumpler Design Factor <i>n</i><sub>d</sub></label>
+            <input type="number" id="inpNd" step="0.1" value="2.0" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Card B2: Self-Contained Pillow-Block Controls -->
+      <div id="panel_pillow" class="hidden bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-3">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">B. Self-Contained Thermal Equilibrium</h2>
+          <span class="text-[11px] font-mono text-cad-muted">Eqs. 12-17..20 • Table 12-2</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">SAE Oil Grade</label>
+            <select id="pbOilGrade" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="SAE10">SAE 10</option>
+              <option value="SAE20" selected>SAE 20</option>
+              <option value="SAE30">SAE 30</option>
+              <option value="SAE40">SAE 40</option>
+              <option value="SAE50">SAE 50</option>
+              <option value="SAE60">SAE 60</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Ambient Air <i>T</i><sub>∞</sub> (<span class="u-temp">°C</span>)</label>
+            <input type="number" id="inpPbTinf" step="any" value="21.1" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Air Condition <i>h</i><sub>CR</sub> (Table 12-2)</label>
+            <select id="pbAirCond" onchange="onPbSystemChange()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="2.0">Still Air (11.4 W/m²·K | 2.0 Btu/h·ft²·°F)</option>
+              <option value="2.7" selected>Shaft-Stirred Air (15.3 W/m²·K | 2.7)</option>
+              <option value="5.9">Moving Air 2.5 m/s (33.5 W/m²·K | 5.9)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Lubrication System</label>
+            <select id="pbLubeSys" onchange="onPbSystemChange()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="ring" selected>Oil Ring</option>
+              <option value="bath">Oil Bath</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Housing Area <i>A</i> (<span class="u-area">mm²</span>)</label>
+            <input type="number" id="inpPbArea" step="any" value="25806" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Factor <i>α</i> (Table 12-2)</label>
+            <input type="number" id="inpPbAlpha" step="0.1" value="1.0" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Card B3: Pressure-Fed Circumferential Groove Controls -->
+      <div id="panel_groove" class="hidden bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-3">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">B. Pressure-Fed Groove Parameters</h2>
+          <span class="text-[11px] font-mono text-cad-muted">Eqs. 12-22..25</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">SAE Oil Grade</label>
+            <select id="grOilGrade" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="SAE10">SAE 10</option>
+              <option value="SAE20" selected>SAE 20</option>
+              <option value="SAE30">SAE 30</option>
+              <option value="SAE40">SAE 40</option>
+              <option value="SAE50">SAE 50</option>
+              <option value="SAE60">SAE 60</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Supply Gauge <i>p</i><sub>s</sub> (<span class="u-press">MPa</span>)</label>
+            <input type="number" id="inpGrPs" step="any" value="0.21" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Sump Temp <i>T</i><sub>s</sub> (<span class="u-temp">°C</span>)</label>
+            <input type="number" id="inpGrTs" step="any" value="48.9" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Half-Bearing Ratio <i>l'</i>/<i>d</i></label>
+            <input type="text" id="outGrRatio" readonly value="0.500" class="w-full rounded px-2.5 py-1.5 text-xs bg-cad-surface text-emerald-300 border border-cad-border font-mono" />
+          </div>
+        </div>
+        <p class="text-[11px] font-mono text-cad-muted">Note: In Groove mode, Bearing Length input represents half-bearing length <i>l'</i> (total sleeve length = 2<i>l'</i> + groove width).</p>
+      </div>
+
+      <!-- Card B4: Boundary-Lubricated Bushing Controls -->
+      <div id="panel_boundary" class="hidden bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-3">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-purple-400">B. Boundary Bushing & Wear Setup</h2>
+          <span class="text-[11px] font-mono text-cad-muted">Tables 12-7..11</span>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-cad-muted mb-1">Bushing Material (Shigley Tables 12-7 & 12-8)</label>
+          <select id="bushingMatSelect" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs"></select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Allowable Radial Wear <i>w</i> (<span class="u-len">mm</span>)</label>
+            <input type="number" id="inpBoundWear" step="any" value="0.127" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Ambient Temp <i>T</i><sub>∞</sub> (<span class="u-temp">°C</span>)</label>
+            <input type="number" id="inpBoundTinf" step="any" value="21.1" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Motion Factor <i>f</i><sub>1</sub> (Table 12-10)</label>
+            <select id="inpBoundF1" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="1.0" selected>Continuous / Clean (1.0)</option>
+              <option value="2.0">Intermittent / Dirty (2.0)</option>
+              <option value="4.0">Oscillating / Dirty & Shock (4.0)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Env. Factor <i>f</i><sub>2</sub> (Table 12-11)</label>
+            <select id="inpBoundF2" onchange="solveAll()" class="w-full rounded px-2 py-1.5 text-xs">
+              <option value="1.0" selected>21°C / 70°F Clean (1.0)</option>
+              <option value="1.3">65°C / 150°F Elevated (1.3)</option>
+              <option value="1.8">121°C / 250°F High Temp (1.8)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Housing Area <i>A</i> (<span class="u-area">mm²</span>)</label>
+            <input type="number" id="inpBoundArea" step="any" value="7742" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-cad-muted mb-1">Design Factor <i>n</i><sub>d</sub></label>
+            <input type="number" id="inpBoundNd" step="0.1" value="1.5" oninput="solveAll()" class="w-full rounded px-2.5 py-1.5 text-xs" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Card C: Bearing Lining Alloy Selector (Table 12-6) -->
+      <div id="cardAlloySelector" class="bg-cad-card border border-cad-border rounded-lg p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between border-b border-cad-border pb-2">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">C. Bearing Lining Alloy (Table 12-6)</h2>
+          <span id="badgeRC" class="text-[11px] font-mono text-sky-300"><i>r</i>/<i>c</i> = 667</span>
+        </div>
+        <div id="alloyCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[235px] overflow-y-auto pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT COLUMN: TELEMETRY, TRUMPLER GATES, TOLERANCE STACK & TECHNICAL DIAGRAMS (8 COLS) -->
+    <section class="lg:col-span-8 space-y-4">
+
+      <!-- 1. Primary KPI Telemetry Cards (Dual-Unit Readouts) -->
+      <div id="kpiGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- 2. Trumpler's 4 Design Criteria & Hydrodynamic Stability Gates -->
+      <div class="bg-cad-card border border-cad-border rounded-lg p-3.5">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-cad-border pb-2 mb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">Trumpler Design Criteria & Stability Validation</h2>
+            <span class="text-[11px] font-mono text-cad-muted">(Shigley Sec. 12-7 & Fig. 12-4)</span>
+          </div>
+          <span id="overallGateBadge" class="px-2 py-0.5 text-xs font-mono font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+            ALL GATES PASSED
+          </span>
+        </div>
+        <div id="trumplerGatesGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- 3. ISO 286-2 Clearance Sensitivity Matrix (c_min vs c_avg vs c_max, Table 12-4) -->
+      <div id="toleranceMatrixCard" class="bg-cad-card border border-cad-border rounded-lg p-3.5">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-cad-border pb-2 mb-2.5">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">ISO 286-2 Tolerance Stack-Up Sensitivity (Table 12-4)</h2>
+          <span id="tolMatrixSub" class="text-[11px] font-mono text-cad-muted">Evaluates worst-case temp at <i>c</i><sub>min</sub> and worst-case film/whirl at <i>c</i><sub>max</sub></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left font-mono text-xs">
+            <thead class="bg-cad-surface text-cad-muted border-b border-cad-border">
+              <tr>
+                <th class="px-2.5 py-1.5">Condition</th>
+                <th class="px-2.5 py-1.5">Clearance <i>c</i></th>
+                <th class="px-2.5 py-1.5">Sommerfeld <i>S</i></th>
+                <th class="px-2.5 py-1.5">Min Film <i>h</i><sub>0</sub></th>
+                <th class="px-2.5 py-1.5">Eccentricity <i>ε</i></th>
+                <th class="px-2.5 py-1.5">Max Temp <i>T</i><sub>max</sub></th>
+                <th class="px-2.5 py-1.5">Friction <i>f</i></th>
+                <th class="px-2.5 py-1.5">Gate Status</th>
+              </tr>
+            </thead>
+            <tbody id="tolMatrixBody" class="divide-y divide-cad-border/60"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. Static Technical CAD Drawings & Full Step-by-Step Telemetry -->
+      <div class="bg-cad-card border border-cad-border rounded-lg overflow-hidden">
+        <div class="flex flex-wrap border-b border-cad-border bg-cad-surface/60 px-2 pt-2 gap-1">
+          <button type="button" id="subTabBtn_diagrams" onclick="switchSubTab('diagrams')" class="px-3 py-1.5 text-xs font-mono font-semibold rounded-t border-t border-x border-cad-border bg-cad-card text-sky-400">
+            Static CAD Drawings & Seireg Curve
+          </button>
+          <button type="button" id="subTabBtn_equations" onclick="switchSubTab('equations')" class="px-3 py-1.5 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white">
+            Full Shigley Equation Breakdown
+          </button>
+        </div>
+
+        <!-- Sub-Tab 1: Static Technical SVG Diagrams -->
+        <div id="subTab_diagrams" class="p-3.5 space-y-4">
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+            <!-- Polar Cross-Section & Film Pressure Envelope (Shigley Fig. 12-15) -->
+            <div class="bg-cad-bg border border-cad-border rounded-lg p-3 cad-grid flex flex-col">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-mono font-bold text-slate-200">FIG. 12-15: POLAR FILM & PRESSURE PROFILE</span>
+                <span class="text-[10px] font-mono text-sky-400">STATIC CAD</span>
+              </div>
+              <div class="flex-1 flex items-center justify-center">
+                <svg id="svgPolar" viewBox="0 0 420 340" class="w-full max-w-[420px] h-auto"></svg>
+              </div>
+              <div class="text-[11px] font-mono text-cad-muted mt-1.5 border-t border-cad-border/70 pt-1.5 flex justify-between">
+                <span>O: Bore Center | O': Journal Center</span>
+                <span>CCW Rotation</span>
+              </div>
+            </div>
+
+            <!-- Seireg Viscosity-Temperature Curve (Shigley Fig. 12-12) -->
+            <div class="bg-cad-bg border border-cad-border rounded-lg p-3 cad-grid flex flex-col">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-mono font-bold text-slate-200">FIG. 12-12: VISCOSITY–TEMP (SAE 10–60)</span>
+                <span class="text-[10px] font-mono text-amber-400"><i>µ</i> = <i>µ</i><sub>0</sub>·exp[<i>b</i>/(<i>T</i><sub>F</sub>+95)]</span>
+              </div>
+              <div class="flex-1 flex items-center justify-center">
+                <svg id="svgSeireg" viewBox="0 0 420 340" class="w-full max-w-[420px] h-auto"></svg>
+              </div>
+              <div class="text-[11px] font-mono text-cad-muted mt-1.5 border-t border-cad-border/70 pt-1.5 flex justify-between">
+                <span>Crosshair: Converged Operating Point</span>
+                <span>Log-Linear Plot</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Axial Manufacturing Drawing & Groove Callout (Shigley Fig. 12-27) -->
+          <div class="bg-cad-bg border border-cad-border rounded-lg p-3 cad-grid">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+              <span class="text-xs font-mono font-bold text-slate-200">FIG. 12-27: AXIAL MANUFACTURING SECTION, TOLERANCE CALLOUT & GROOVE GEOMETRY</span>
+              <span class="text-[10px] font-mono text-emerald-400">DWG NO. SHIGLEY-CH12-01</span>
+            </div>
+            <svg id="svgManufacturing" viewBox="0 0 880 215" class="w-full h-auto"></svg>
+          </div>
+        </div>
+
+        <!-- Sub-Tab 2: Detailed Equation Breakdown -->
+        <div id="subTab_equations" class="hidden p-4">
+          <div id="equationBreakdownGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. VERIFIED SHIGLEY 9TH ED. CHAPTER 12 DATASETS
+    // =========================================================================
+
+    // Table 12-1: Seireg Viscosity-Temperature Curve Fit Parameters
+    // mu(reyn) = mu0 * exp(b / (T_F + 95))
+    const TABLE_12_1 = {
+      SAE10: { name: 'SAE 10', mu0: 0.0158e-6, b: 1157.5, color: '#38bdf8' },
+      SAE20: { name: 'SAE 20', mu0: 0.0136e-6, b: 1271.6, color: '#10b981' },
+      SAE30: { name: 'SAE 30', mu0: 0.0141e-6, b: 1360.0, color: '#f59e0b' },
+      SAE40: { name: 'SAE 40', mu0: 0.0121e-6, b: 1474.4, color: '#a855f7' },
+      SAE50: { name: 'SAE 50', mu0: 0.0170e-6, b: 1509.6, color: '#f43f5e' },
+      SAE60: { name: 'SAE 60', mu0: 0.0187e-6, b: 1564.0, color: '#ec4899' }
+    };
+
+    // Table 12-5: Typical Unit Load Ranges by Mechanical Application
+    const TABLE_12_5 = {
+      centrifugal_pump: { label: 'Centrifugal pumps (Main)', minPsi: 100, maxPsi: 180 },
+      electric_motor:   { label: 'Electric motors (Main)',   minPsi: 120, maxPsi: 250 },
+      steam_turbine:    { label: 'Steam turbines (Main)',    minPsi: 120, maxPsi: 250 },
+      gear_reducer:     { label: 'Gear reducers (Main)',     minPsi: 120, maxPsi: 250 },
+      air_comp_main:    { label: 'Air compressors (Main)',   minPsi: 140, maxPsi: 280 },
+      air_comp_crank:   { label: 'Air compressors (Crank)',  minPsi: 280, maxPsi: 500 },
+      auto_main:        { label: 'Automotive engines (Main)',minPsi: 600, maxPsi: 750 },
+      diesel_main:      { label: 'Diesel engines (Main)',    minPsi: 900, maxPsi: 1700 },
+      diesel_crank:     { label: 'Diesel engines (Crank)',   minPsi: 1150, maxPsi: 2300 },
+      auto_crank:       { label: 'Automotive (Crankpin)',    minPsi: 1700, maxPsi: 2300 },
+      diesel_wrist:     { label: 'Diesel engines (Wrist)',   minPsi: 2000, maxPsi: 2300 }
+    };
+
+    // Table 12-6: Hydrodynamic Bearing Lining Alloys
+    const TABLE_12_6 = [
+      { id: 'tin_thick',   name: 'Tin-base babbitt',  thickMm: '0.56 mm', thickIn: '0.022 in', sae: 'SAE 12',  rcMin: 600,  rcMax: 1000, capIdx: 1.0, corr: 'Excellent' },
+      { id: 'tin_thin',    name: 'Tin-base babbitt',  thickMm: '0.10 mm', thickIn: '0.004 in', sae: 'SAE 12',  rcMin: 600,  rcMax: 1000, capIdx: 1.5, corr: 'Excellent' },
+      { id: 'lead_thick',  name: 'Lead-base babbitt', thickMm: '0.56 mm', thickIn: '0.022 in', sae: 'SAE 15',  rcMin: 600,  rcMax: 1000, capIdx: 1.2, corr: 'Very good' },
+      { id: 'lead_thin',   name: 'Lead-base babbitt', thickMm: '0.10 mm', thickIn: '0.004 in', sae: 'SAE 15',  rcMin: 600,  rcMax: 1000, capIdx: 1.5, corr: 'Very good' },
+      { id: 'copper_lead', name: 'Copper-lead',       thickMm: '0.56 mm', thickIn: '0.022 in', sae: 'SAE 480', rcMin: 500,  rcMax: 1000, capIdx: 1.9, corr: 'Good' },
+      { id: 'aluminum',    name: 'Aluminum alloy',    thickMm: 'Solid',   thickIn: 'Solid',    sae: '—',       rcMin: 400,  rcMax: 500,  capIdx: 3.0, corr: 'Excellent' },
+      { id: 'leaded_brz',  name: 'Leaded bronze',     thickMm: 'Solid',   thickIn: 'Solid',    sae: 'SAE 792', rcMin: 500,  rcMax: 1000, capIdx: 3.3, corr: 'Very good' },
+      { id: 'silver_ovl',  name: 'Silver + overlay',  thickMm: '0.33 mm', thickIn: '0.013 in', sae: 'SAE 17P', rcMin: 600,  rcMax: 1000, capIdx: 4.1, corr: 'Excellent' },
+      { id: 'trimetal_88', name: 'Trimetal 88',       thickMm: '0.20+0.025 mm', thickIn: '0.008+0.001"', sae: '—', rcMin: 500, rcMax: 1000, capIdx: 4.1, corr: 'Excellent' },
+      { id: 'trimetal_77', name: 'Trimetal 77',       thickMm: '0.33+0.025 mm', thickIn: '0.013+0.001"', sae: '—', rcMin: 500, rcMax: 1000, capIdx: 4.1, corr: 'Very good' }
+    ];
+
+    // Tables 12-7 & 12-8: Boundary-Lubricated Bushing Materials
+    // K in units of 10^-10 in^3*min / (lbf*ft*h)
+    const TABLE_12_7_8 = [
+      { id: 'cast_bronze',    name: 'Cast bronze',               maxP: 4500, maxT: 325, maxV: 1500, maxPV: 50000, K: 250,  fs: 0.10 },
+      { id: 'porous_bronze',  name: 'Porous bronze',             maxP: 4500, maxT: 150, maxV: 1500, maxPV: 50000, K: 102,  fs: 0.12 },
+      { id: 'sintered_brz',   name: 'Sintered bronze',           maxP: 4500, maxT: 150, maxV: 1500, maxPV: 8500,  K: 102,  fs: 0.12 },
+      { id: 'porous_iron',    name: 'Porous iron',               maxP: 8000, maxT: 150, maxV: 800,  maxPV: 50000, K: 200,  fs: 0.15 },
+      { id: 'oiles_500',      name: 'Oiles 500 (Alloy brass)',   maxP: 3560, maxT: 300, maxV: 100,  maxPV: 46700, K: 0.60, fs: 0.03 },
+      { id: 'oiles_800',      name: 'Oiles 800 (PTFE-filled)',   maxP: 2130, maxT: 536, maxV: 394,  maxPV: 21400, K: 1.50, fs: 0.06 },
+      { id: 'phenolics_glass',name: 'Phenolics + 25% glass',     maxP: 6000, maxT: 200, maxV: 2500, maxPV: 11500, K: 8.0,  fs: 0.25 },
+      { id: 'nylon_66',       name: 'Nylon 66',                  maxP: 1000, maxT: 200, maxV: 1000, maxPV: 3000,  K: 200,  fs: 0.20 },
+      { id: 'nylon_ptfe',     name: 'Nylon 66 + 15% PTFE',       maxP: 1000, maxT: 200, maxV: 1000, maxPV: 7000,  K: 13,   fs: 0.14 },
+      { id: 'acetal',         name: 'Acetal (Delrin)',           maxP: 1000, maxT: 180, maxV: 1000, maxPV: 3000,  K: 50,   fs: 0.20 },
+      { id: 'ptfe',           name: 'PTFE (Teflon)',             maxP: 500,  maxT: 500, maxV: 100,  maxPV: 1000,  K: 2500, fs: 0.08 },
+      { id: 'reinf_ptfe',     name: 'Reinforced PTFE',           maxP: 2500, maxT: 500, maxV: 1000, maxPV: 10000, K: 7.0,  fs: 0.12 },
+      { id: 'carbon_graph',   name: 'Carbon-graphite',           maxP: 600,  maxT: 750, maxV: 2500, maxPV: 15000, K: 15,   fs: 0.15 }
+    ];
+
+    // =========================================================================
+    // 2. DIGITIZED RAIMONDI & BOYD CHARTS (SHIGLEY FIGS. 12-16 TO 12-22)
+    // Parameterized by eccentricity ratio eps in [0.00, 0.97] for l/d in {inf, 1, 1/2, 1/4}
+    // Columns: [eps, S, h0_c, phi, f_rc, Q_rcNl, Qs_Q, P_pmax, theta_pmax, theta_p0]
+    // =========================================================================
+    const RB_DATA = {
+      inf: [
+        [0.00, 10.000, 1.00, 90.0, 197.39, 3.142, 0.000, 1.000, 90.0, 180.0],
+        [0.10, 0.2400, 0.90, 69.1, 4.800,  3.030, 0.000, 0.826, 79.0, 134.0],
+        [0.20, 0.1230, 0.80, 67.3, 2.570,  2.830, 0.000, 0.814, 74.0, 130.0],
+        [0.40, 0.0626, 0.60, 61.9, 1.520,  2.260, 0.000, 0.764, 62.0, 123.0],
+        [0.60, 0.0389, 0.40, 54.3, 1.200,  1.560, 0.000, 0.667, 48.0, 116.0],
+        [0.80, 0.0210, 0.20, 42.2, 0.961,  0.760, 0.000, 0.495, 33.0, 108.0],
+        [0.90, 0.0115, 0.10, 31.6, 0.756,  0.411, 0.000, 0.358, 22.5, 104.0],
+        [0.97, 0.0035, 0.03, 18.0, 0.470,  0.120, 0.000, 0.200, 12.0, 100.0]
+      ],
+      1: [
+        [0.00, 10.000, 1.00, 90.0, 197.39, 3.142, 0.000, 1.000, 90.0, 180.0],
+        [0.10, 1.3300, 0.90, 79.5, 26.40,  3.370, 0.150, 0.840, 85.0, 138.0],
+        [0.20, 0.6310, 0.80, 74.0, 12.80,  3.590, 0.280, 0.804, 78.0, 133.0],
+        [0.40, 0.2640, 0.60, 63.1, 5.790,  3.990, 0.497, 0.727, 62.0, 124.0],
+        [0.58, 0.1350, 0.42, 53.0, 3.460,  4.300, 0.654, 0.630, 49.0, 117.0],
+        [0.60, 0.1210, 0.40, 50.6, 3.220,  4.330, 0.680, 0.607, 47.0, 116.0],
+        [0.80, 0.0446, 0.20, 36.2, 1.700,  4.620, 0.842, 0.420, 31.0, 108.0],
+        [0.90, 0.0188, 0.10, 26.5, 1.050,  4.740, 0.919, 0.285, 21.0, 104.0],
+        [0.97, 0.00474,0.03, 15.5, 0.514,  4.820, 0.973, 0.145, 11.5, 100.0]
+      ],
+      0.5: [
+        [0.00, 10.000, 1.00, 90.0, 197.39, 3.142, 0.000, 1.000, 90.0, 180.0],
+        [0.10, 4.3100, 0.90, 81.6, 85.60,  3.430, 0.173, 0.823, 86.0, 139.0],
+        [0.20, 2.0300, 0.80, 74.9, 40.90,  3.720, 0.318, 0.793, 79.0, 134.0],
+        [0.40, 0.7790, 0.60, 61.5, 17.00,  4.290, 0.552, 0.694, 62.0, 124.0],
+        [0.60, 0.3190, 0.40, 48.1, 8.100,  4.850, 0.730, 0.565, 45.0, 115.0],
+        [0.80, 0.0923, 0.20, 33.3, 3.260,  5.410, 0.874, 0.374, 29.0, 107.0],
+        [0.90, 0.0313, 0.10, 23.7, 1.600,  5.690, 0.939, 0.246, 19.5, 103.0],
+        [0.97, 0.00609,0.03, 13.7, 0.610,  5.880, 0.980, 0.120, 10.5, 100.0]
+      ],
+      0.25: [
+        [0.00, 10.000, 1.00, 90.0, 197.39, 3.142, 0.000, 1.000, 90.0, 180.0],
+        [0.10, 16.200, 0.90, 82.3, 322.0,  3.450, 0.180, 0.815, 86.5, 140.0],
+        [0.20, 7.5700, 0.80, 75.2, 153.0,  3.760, 0.330, 0.784, 79.5, 135.0],
+        [0.40, 2.8300, 0.60, 60.9, 61.10,  4.370, 0.567, 0.680, 62.0, 124.0],
+        [0.60, 1.0700, 0.40, 46.7, 26.70,  4.990, 0.746, 0.543, 44.0, 115.0],
+        [0.80, 0.2610, 0.20, 31.0, 8.800,  5.600, 0.884, 0.351, 27.5, 106.0],
+        [0.90, 0.0736, 0.10, 21.8, 3.500,  5.910, 0.945, 0.226, 18.5, 102.0],
+        [0.97, 0.0101, 0.03, 12.2, 0.922,  6.120, 0.984, 0.105, 10.0, 99.0]
+      ]
+    };
+
+    // ISO 286-2 Tolerance Bands (matching Shigley Table 12-3)
+    function getIsoClearanceStack(d_in, fitCode) {
+      if (Math.abs(d_in - 1.5) < 0.02) {
+        if (fitCode === 'H8/f7') return { cMin: 0.00050, cAvg: 0.001125, cMax: 0.00175 };
+        if (fitCode === 'H9/d9') return { cMin: 0.00155, cAvg: 0.002750, cMax: 0.00395 };
+      }
+      const d_mm = d_in * 25.4;
+      let IT6, IT7, IT8, IT9, ei_g, ei_f, ei_e, ei_d;
+      if (d_mm <= 18) {
+        IT6 = 11; IT7 = 18; IT8 = 27; IT9 = 43;
+        ei_g = 6; ei_f = 16; ei_e = 32; ei_d = 50;
+      } else if (d_mm <= 30) {
+        IT6 = 13; IT7 = 21; IT8 = 33; IT9 = 52;
+        ei_g = 7; ei_f = 20; ei_e = 40; ei_d = 65;
+      } else if (d_mm <= 50) {
+        IT6 = 16; IT7 = 25; IT8 = 39; IT9 = 62;
+        ei_g = 9; ei_f = 25; ei_e = 50; ei_d = 80;
+      } else if (d_mm <= 80) {
+        IT6 = 19; IT7 = 30; IT8 = 46; IT9 = 74;
+        ei_g = 10; ei_f = 30; ei_e = 60; ei_d = 100;
+      } else {
+        IT6 = 22; IT7 = 35; IT8 = 54; IT9 = 87;
+        ei_g = 12; ei_f = 36; ei_e = 72; ei_d = 120;
+      }
+      let holeTol_um = IT7, shaftFund_um = ei_f, shaftTol_um = IT7;
+      if (fitCode === 'H7/g6') { holeTol_um = IT7; shaftFund_um = ei_g; shaftTol_um = IT6; }
+      if (fitCode === 'H7/f7') { holeTol_um = IT7; shaftFund_um = ei_f; shaftTol_um = IT7; }
+      if (fitCode === 'H8/f7') { holeTol_um = IT8; shaftFund_um = ei_f; shaftTol_um = IT7; }
+      if (fitCode === 'H7/e8') { holeTol_um = IT7; shaftFund_um = ei_e; shaftTol_um = IT8; }
+      if (fitCode === 'H9/d9') { holeTol_um = IT9; shaftFund_um = ei_d; shaftTol_um = IT9; }
+
+      const cMin_mm = shaftFund_um / 2000;
+      const cMax_mm = (shaftFund_um + holeTol_um + shaftTol_um) / 2000;
+      const cMin = cMin_mm / 25.4;
+      const cMax = cMax_mm / 25.4;
+      return { cMin, cAvg: 0.5 * (cMin + cMax), cMax };
+    }
+
+    // =========================================================================
+    // 3. APPLICATION STATE & DUAL-UNIT CONVERSION ENGINE (SI DEFAULT)
+    // =========================================================================
+    let state = {
+      unit: 'SI',           // Default to SI ('SI' or 'IPS')
+      mode: 'fullfilm',     // 'fullfilm', 'pillow', 'groove', 'boundary'
+      selectedAlloy: 'tin_thin',
+      activePreset: 'si_turbine',
+      lastResults: null
+    };
+
+    const CONV = {
+      inToMm: 25.4,
+      lbfToN: 4.4482216,
+      psiToMPa: 0.006894757,
+      ureynToMPas: 6.894757,
+      in3sToCm3s: 16.387064,
+      lbfInToNm: 0.1129848,
+      btuhToW: 0.29307107,
+      fpmToMs: 0.00508,
+      fToC: (f) => (f - 32) * 5 / 9,
+      cToF: (c) => c * 9 / 5 + 32,
+      dFtoDC: (df) => df * 5 / 9,
+      dCtoDF: (dc) => dc * 9 / 5
+    };
+
+    function getInpIPS(id, kind) {
+      const val = parseFloat(document.getElementById(id).value) || 0;
+      if (state.unit === 'IPS') return val;
+      switch (kind) {
+        case 'len':   return val / CONV.inToMm;
+        case 'force': return val / CONV.lbfToN;
+        case 'press': return val / CONV.psiToMPa;
+        case 'visc':  return val / CONV.ureynToMPas;
+        case 'temp':  return CONV.cToF(val);
+        case 'area':  return val / (CONV.inToMm * CONV.inToMm);
+        default:      return val;
+      }
+    }
+
+    function setInpFromIPS(id, valIPS, kind, decimals = 4) {
+      let disp = valIPS;
+      if (state.unit === 'SI') {
+        switch (kind) {
+          case 'len':   disp = valIPS * CONV.inToMm; break;
+          case 'force': disp = valIPS * CONV.lbfToN; break;
+          case 'press': disp = valIPS * CONV.psiToMPa; break;
+          case 'visc':  disp = valIPS * CONV.ureynToMPas; break;
+          case 'temp':  disp = CONV.fToC(valIPS); break;
+          case 'area':  disp = valIPS * CONV.inToMm * CONV.inToMm; break;
+        }
+      }
+      document.getElementById(id).value = Number(disp.toFixed(decimals));
+    }
+
+    function fmtVal(valIPS, kind, decIPS = 3, decSI = 3) {
+      if (!isFinite(valIPS)) return '—';
+      if (state.unit === 'IPS') {
+        switch (kind) {
+          case 'len':    return `${valIPS.toFixed(decIPS)} in`;
+          case 'film':   return `${valIPS.toFixed(5)} in`;
+          case 'force':  return `${valIPS.toFixed(decIPS)} lbf`;
+          case 'press':  return `${valIPS.toFixed(decIPS)} psi`;
+          case 'visc':   return `${valIPS.toFixed(2)} µreyn`;
+          case 'temp':   return `${valIPS.toFixed(1)} °F`;
+          case 'dtemp':  return `${valIPS.toFixed(1)} °F`;
+          case 'flow':   return `${valIPS.toFixed(4)} in³/s`;
+          case 'torque': return `${valIPS.toFixed(3)} lbf·in`;
+          case 'power':  return `${valIPS.toFixed(1)} Btu/h`;
+          case 'vel':    return `${valIPS.toFixed(1)} fpm`;
+          case 'pv':     return `${Math.round(valIPS).toLocaleString()} psi·fpm`;
+          default:       return valIPS.toFixed(decIPS);
+        }
+      } else {
+        switch (kind) {
+          case 'len':    return `${(valIPS * CONV.inToMm).toFixed(decSI)} mm`;
+          case 'film':   return `${(valIPS * CONV.inToMm * 1000).toFixed(2)} µm`;
+          case 'force':  return `${(valIPS * CONV.lbfToN).toFixed(decSI)} N`;
+          case 'press':  return `${(valIPS * CONV.psiToMPa).toFixed(decSI)} MPa`;
+          case 'visc':   return `${(valIPS * CONV.ureynToMPas).toFixed(2)} mPa·s`;
+          case 'temp':   return `${CONV.fToC(valIPS).toFixed(1)} °C`;
+          case 'dtemp':  return `${CONV.dFtoDC(valIPS).toFixed(1)} °C`;
+          case 'flow':   return `${(valIPS * CONV.in3sToCm3s).toFixed(3)} cm³/s`;
+          case 'torque': return `${(valIPS * CONV.lbfInToNm).toFixed(3)} N·m`;
+          case 'power':  return `${(valIPS * CONV.btuhToW).toFixed(1)} W`;
+          case 'vel':    return `${(valIPS * CONV.fpmToMs).toFixed(3)} m/s`;
+          case 'pv':     return `${(valIPS * CONV.psiToMPa * CONV.fpmToMs).toFixed(3)} MPa·m/s`;
+          default:       return valIPS.toFixed(decSI);
+        }
+      }
+    }
+
+    // Secondary unit formatter for dual-unit telemetry readouts
+    function fmtSecondary(valIPS, kind) {
+      if (!isFinite(valIPS)) return '—';
+      if (state.unit === 'SI') {
+        switch (kind) {
+          case 'film':   return `${valIPS.toFixed(5)} in`;
+          case 'press':  return `${valIPS.toFixed(1)} psi`;
+          case 'temp':   return `${valIPS.toFixed(1)} °F`;
+          case 'dtemp':  return `${valIPS.toFixed(1)} °F`;
+          case 'power':  return `${valIPS.toFixed(1)} Btu/h`;
+          case 'flow':   return `${valIPS.toFixed(4)} in³/s`;
+          case 'visc':   return `${valIPS.toFixed(2)} µreyn`;
+          case 'pv':     return `${Math.round(valIPS).toLocaleString()} psi·fpm`;
+          default:       return '';
+        }
+      } else {
+        switch (kind) {
+          case 'film':   return `${(valIPS * CONV.inToMm * 1000).toFixed(2)} µm`;
+          case 'press':  return `${(valIPS * CONV.psiToMPa).toFixed(2)} MPa`;
+          case 'temp':   return `${CONV.fToC(valIPS).toFixed(1)} °C`;
+          case 'dtemp':  return `${CONV.dFtoDC(valIPS).toFixed(1)} °C`;
+          case 'power':  return `${(valIPS * CONV.btuhToW).toFixed(1)} W`;
+          case 'flow':   return `${(valIPS * CONV.in3sToCm3s).toFixed(3)} cm³/s`;
+          case 'visc':   return `${(valIPS * CONV.ureynToMPas).toFixed(2)} mPa·s`;
+          case 'pv':     return `${(valIPS * CONV.psiToMPa * CONV.fpmToMs).toFixed(3)} MPa·m/s`;
+          default:       return '';
+        }
+      }
+    }
+
+    function setUnitSystem(newUnit) {
+      if (state.unit === newUnit) return;
+      const snap = {
+        d: getInpIPS('inpD', 'len'),
+        l: getInpIPS('inpL', 'len'),
+        c: getInpIPS('inpC', 'len'),
+        W: getInpIPS('inpW', 'force'),
+        Wst: getInpIPS('inpWst', 'force'),
+        directVisc: getInpIPS('inpDirectVisc', 'visc'),
+        ffInletDirect: getInpIPS('inpFfInletDirect', 'temp'),
+        ffInletIter: getInpIPS('inpFfInletIter', 'temp'),
+        pbTinf: getInpIPS('inpPbTinf', 'temp'),
+        pbArea: getInpIPS('inpPbArea', 'area'),
+        grPs: getInpIPS('inpGrPs', 'press'),
+        grTs: getInpIPS('inpGrTs', 'temp'),
+        boundWear: getInpIPS('inpBoundWear', 'len'),
+        boundTinf: getInpIPS('inpBoundTinf', 'temp'),
+        boundArea: getInpIPS('inpBoundArea', 'area')
+      };
+
+      state.unit = newUnit;
+      document.getElementById('btnUnitSI').className = newUnit === 'SI'
+        ? 'px-2.5 py-1 text-xs font-mono font-semibold rounded bg-sky-500 text-slate-950'
+        : 'px-2.5 py-1 text-xs font-mono font-semibold rounded text-cad-muted hover:text-white';
+      document.getElementById('btnUnitIPS').className = newUnit === 'IPS'
+        ? 'px-2.5 py-1 text-xs font-mono font-semibold rounded bg-sky-500 text-slate-950'
+        : 'px-2.5 py-1 text-xs font-mono font-semibold rounded text-cad-muted hover:text-white';
+
+      document.querySelectorAll('.u-len').forEach(el => el.textContent = newUnit === 'IPS' ? 'in' : 'mm');
+      document.querySelectorAll('.u-force').forEach(el => el.textContent = newUnit === 'IPS' ? 'lbf' : 'N');
+      document.querySelectorAll('.u-press').forEach(el => el.textContent = newUnit === 'IPS' ? 'psi' : 'MPa');
+      document.querySelectorAll('.u-visc').forEach(el => el.textContent = newUnit === 'IPS' ? 'µreyn' : 'mPa·s');
+      document.querySelectorAll('.u-temp').forEach(el => el.textContent = newUnit === 'IPS' ? '°F' : '°C');
+      document.querySelectorAll('.u-area').forEach(el => el.textContent = newUnit === 'IPS' ? 'in²' : 'mm²');
+
+      const dLen = newUnit === 'IPS' ? 4 : 3;
+      const dClear = newUnit === 'IPS' ? 5 : 4;
+      setInpFromIPS('inpD', snap.d, 'len', dLen);
+      setInpFromIPS('inpL', snap.l, 'len', dLen);
+      setInpFromIPS('inpC', snap.c, 'len', dClear);
+      setInpFromIPS('inpW', snap.W, 'force', 1);
+      setInpFromIPS('inpWst', snap.Wst, 'force', 1);
+      setInpFromIPS('inpDirectVisc', snap.directVisc, 'visc', 2);
+      setInpFromIPS('inpFfInletDirect', snap.ffInletDirect, 'temp', 1);
+      setInpFromIPS('inpFfInletIter', snap.ffInletIter, 'temp', 1);
+      setInpFromIPS('inpPbTinf', snap.pbTinf, 'temp', 1);
+      setInpFromIPS('inpPbArea', snap.pbArea, 'area', 1);
+      setInpFromIPS('inpGrPs', snap.grPs, 'press', 2);
+      setInpFromIPS('inpGrTs', snap.grTs, 'temp', 1);
+      setInpFromIPS('inpBoundWear', snap.boundWear, 'len', dClear);
+      setInpFromIPS('inpBoundTinf', snap.boundTinf, 'temp', 1);
+      setInpFromIPS('inpBoundArea', snap.boundArea, 'area', 1);
+
+      renderAlloyCards();
+      solveAll();
+    }
+
+    // =========================================================================
+    // 4. CORE HYDRODYNAMIC & THERMAL SOLVER MATH (SHIGLEY CH. 12)
+    // =========================================================================
+    function evalSeiregViscosityReyn(gradeKey, T_F) {
+      const oil = TABLE_12_1[gradeKey] || TABLE_12_1.SAE20;
+      const clampedT = Math.max(40, Math.min(400, T_F));
+      return oil.mu0 * Math.exp(oil.b / (clampedT + 95.0));
+    }
+
+    function interpRBCurve(curveRows, S) {
+      const safeS = Math.max(0.0035, Math.min(10.0, S));
+      const logS = Math.log10(safeS);
+
+      for (let i = 0; i < curveRows.length - 1; i++) {
+        const rHi = curveRows[i];
+        const rLo = curveRows[i + 1];
+        if (safeS <= rHi[1] && safeS >= rLo[1]) {
+          const logHi = Math.log10(rHi[1]);
+          const logLo = Math.log10(rLo[1]);
+          const t = (logS - logLo) / (logHi - logLo);
+          const lerp = (idx) => rLo[idx] + t * (rHi[idx] - rLo[idx]);
+          return {
+            eps: lerp(0),
+            h0_c: lerp(2),
+            phi: lerp(3),
+            f_rc: lerp(4),
+            Q_rcNl: lerp(5),
+            Qs_Q: lerp(6),
+            P_pmax: lerp(7),
+            theta_pmax: lerp(8),
+            theta_p0: lerp(9)
+          };
+        }
+      }
+      const last = curveRows[curveRows.length - 1];
+      return {
+        eps: last[0], h0_c: last[2], phi: last[3], f_rc: last[4],
+        Q_rcNl: last[5], Qs_Q: last[6], P_pmax: last[7], theta_pmax: last[8], theta_p0: last[9]
+      };
+    }
+
+    function solveRaimondiBoyd(S, ld) {
+      const yInf = interpRBCurve(RB_DATA.inf, S);
+      const y1   = interpRBCurve(RB_DATA[1], S);
+      const y05  = interpRBCurve(RB_DATA[0.5], S);
+      const y025 = interpRBCurve(RB_DATA[0.25], S);
+
+      if (ld >= 2.5) return yInf;
+      const x = Math.max(0.20, Math.min(1.5, ld));
+      const invX3 = 1.0 / (x * x * x);
+
+      const wInf  = -(1 / 8)  * (1 - x) * (1 - 2 * x) * (1 - 4 * x);
+      const w1    =  (1 / 3)  * (1 - 2 * x) * (1 - 4 * x);
+      const w05   = -(1 / 4)  * (1 - x) * (1 - 4 * x);
+      const w025  =  (1 / 24) * (1 - x) * (1 - 2 * x);
+
+      const combine = (key) => invX3 * (wInf * yInf[key] + w1 * y1[key] + w05 * y05[key] + w025 * y025[key]);
+
+      const h0_c = Math.max(0.02, Math.min(0.99, combine('h0_c')));
+      return {
+        eps: Math.max(0.01, Math.min(0.98, 1.0 - h0_c)),
+        h0_c,
+        phi: Math.max(10, Math.min(90, combine('phi'))),
+        f_rc: Math.max(0.2, combine('f_rc')),
+        Q_rcNl: Math.max(0.1, combine('Q_rcNl')),
+        Qs_Q: Math.max(0, Math.min(0.99, combine('Qs_Q'))),
+        P_pmax: Math.max(0.08, Math.min(1.0, combine('P_pmax'))),
+        theta_pmax: Math.max(8, Math.min(90, combine('theta_pmax'))),
+        theta_p0: Math.max(98, Math.min(180, combine('theta_p0')))
+      };
+    }
+
+    function evalFig12_24TempRiseF(S, ld, P_psi) {
+      const poly1   = 0.349109 + 6.00940 * S + 0.047467 * S * S;
+      const poly05  = 0.394552 + 6.392527 * S - 0.036013 * S * S;
+      const poly025 = 0.933828 + 6.437512 * S - 0.011048 * S * S;
+
+      let factor;
+      if (ld >= 1.0) {
+        factor = poly1;
+      } else if (ld >= 0.5) {
+        const t = (ld - 0.5) / 0.5;
+        factor = poly05 + t * (poly1 - poly05);
+      } else {
+        const t = Math.max(0, (ld - 0.25) / 0.25);
+        factor = poly025 + t * (poly05 - poly025);
+      }
+      return (factor * P_psi) / 9.70;
+    }
+
+    function evaluateHydroPoint(params, c_in) {
+      const { mode, d, l, W, N_rps, grade, ffViscMode, directViscReyn, T1_F, Tinf_F, hCR, alpha, A_in2, ps_psi, Ts_F } = params;
+      const r = d / 2.0;
+      const rc = r / c_in;
+      const ld = l / d;
+
+      if (mode === 'fullfilm') {
+        const P = W / (l * d);
+        let mu_reyn = directViscReyn;
+        let Tav = T1_F;
+        let dT = 0;
+
+        if (ffViscMode === 'direct') {
+          const S = rc * rc * (mu_reyn * N_rps / P);
+          const rb = solveRaimondiBoyd(S, ld);
+          dT = evalFig12_24TempRiseF(S, ld, P);
+          Tav = T1_F + dT / 2.0;
+          const Tmax = T1_F + dT;
+          const f = rb.f_rc / rc;
+          const T_torque = f * W * r;
+          const H_gen = (2 * Math.PI * N_rps * T_torque * 3600) / (778.16 * 12);
+          const Q = rb.Q_rcNl * r * c_in * N_rps * l;
+          const Qs = rb.Qs_Q * Q;
+          const pmax = P / rb.P_pmax;
+          return {
+            S, P, mu_reyn, Tav, T1: T1_F, dT, Tmax, Tb: null,
+            ...rb, h0: rb.h0_c * c_in, e: rb.eps * c_in, f,
+            T_torque, H_gen, H_loss: H_gen, Q, Qs, pmax, c: c_in, rc, ld
+          };
+        } else {
+          Tav = T1_F + 20.0;
+          for (let iter = 0; iter < 40; iter++) {
+            mu_reyn = evalSeiregViscosityReyn(grade, Tav);
+            const S = rc * rc * (mu_reyn * N_rps / P);
+            dT = evalFig12_24TempRiseF(S, ld, P);
+            const nextTav = T1_F + dT / 2.0;
+            if (Math.abs(nextTav - Tav) < 0.005) {
+              Tav = nextTav;
+              break;
+            }
+            Tav = 0.5 * Tav + 0.5 * nextTav;
+          }
+          mu_reyn = evalSeiregViscosityReyn(grade, Tav);
+          const S = rc * rc * (mu_reyn * N_rps / P);
+          const rb = solveRaimondiBoyd(S, ld);
+          dT = evalFig12_24TempRiseF(S, ld, P);
+          const Tmax = T1_F + dT;
+          const f = rb.f_rc / rc;
+          const T_torque = f * W * r;
+          const H_gen = (2 * Math.PI * N_rps * T_torque * 3600) / (778.16 * 12);
+          const Q = rb.Q_rcNl * r * c_in * N_rps * l;
+          const Qs = rb.Qs_Q * Q;
+          const pmax = P / rb.P_pmax;
+          return {
+            S, P, mu_reyn, Tav, T1: T1_F, dT, Tmax, Tb: null,
+            ...rb, h0: rb.h0_c * c_in, e: rb.eps * c_in, f,
+            T_torque, H_gen, H_loss: H_gen, Q, Qs, pmax, c: c_in, rc, ld
+          };
+        }
+      }
+
+      if (mode === 'pillow') {
+        const P = W / (l * d);
+        const A_ft2 = A_in2 / 144.0;
+        const residual = (Tf) => {
+          const mu = evalSeiregViscosityReyn(grade, Tf);
+          const S = rc * rc * (mu * N_rps / P);
+          const rb = solveRaimondiBoyd(S, ld);
+          const f = rb.f_rc / rc;
+          const T_tq = f * W * r;
+          const Hgen = (2 * Math.PI * N_rps * T_tq * 3600) / (778.16 * 12);
+          const Hloss = (hCR * A_ft2 / (1.0 + alpha)) * (Tf - Tinf_F);
+          return Hgen - Hloss;
+        };
+
+        let lo = Tinf_F + 0.5;
+        let hi = 450.0;
+        let Tf = 180.0;
+        for (let iter = 0; iter < 60; iter++) {
+          const mid = 0.5 * (lo + hi);
+          const rMid = residual(mid);
+          if (Math.abs(rMid) < 0.01 || (hi - lo) < 0.005) {
+            Tf = mid;
+            break;
+          }
+          if (rMid > 0) lo = mid;
+          else hi = mid;
+          Tf = mid;
+        }
+
+        const mu_reyn = evalSeiregViscosityReyn(grade, Tf);
+        const S = rc * rc * (mu_reyn * N_rps / P);
+        const rb = solveRaimondiBoyd(S, ld);
+        const f = rb.f_rc / rc;
+        const T_torque = f * W * r;
+        const H_gen = (2 * Math.PI * N_rps * T_torque * 3600) / (778.16 * 12);
+        const H_loss = (hCR * A_ft2 / (1.0 + alpha)) * (Tf - Tinf_F);
+        const Tb = Tinf_F + (Tf - Tinf_F) / (1.0 + alpha);
+        const dT = evalFig12_24TempRiseF(S, ld, P);
+        const T1 = Tf - dT / 2.0;
+        const Tmax = Tf + dT / 2.0;
+        const Q = rb.Q_rcNl * r * c_in * N_rps * l;
+        const Qs = rb.Qs_Q * Q;
+        const pmax = P / rb.P_pmax;
+
+        return {
+          S, P, mu_reyn, Tav: Tf, T1, dT, Tmax, Tb,
+          ...rb, h0: rb.h0_c * c_in, e: rb.eps * c_in, f,
+          T_torque, H_gen, H_loss, Q, Qs, pmax, c: c_in, rc, ld
+        };
+      }
+
+      if (mode === 'groove') {
+        const lPrime = l;
+        const P = W / (4.0 * r * lPrime);
+        const ldPrime = lPrime / d;
+
+        let Tav = Ts_F + 30.0;
+        let dT = 0;
+        for (let iter = 0; iter < 50; iter++) {
+          const mu = evalSeiregViscosityReyn(grade, Tav);
+          const S = rc * rc * (mu * N_rps / P);
+          const rb = solveRaimondiBoyd(S, ldPrime);
+          const denom = (1.0 + 1.5 * rb.eps * rb.eps) * Math.max(1.0, ps_psi) * Math.pow(r, 4);
+          dT = (0.0123 * rb.f_rc * S * W * W) / denom;
+          const nextTav = Ts_F + dT / 2.0;
+          if (Math.abs(nextTav - Tav) < 0.005) {
+            Tav = nextTav;
+            break;
+          }
+          Tav = 0.5 * Tav + 0.5 * nextTav;
+        }
+
+        const mu_reyn = evalSeiregViscosityReyn(grade, Tav);
+        const S = rc * rc * (mu_reyn * N_rps / P);
+        const rb = solveRaimondiBoyd(S, ldPrime);
+        const denom = (1.0 + 1.5 * rb.eps * rb.eps) * Math.max(1.0, ps_psi) * Math.pow(r, 4);
+        dT = (0.0123 * rb.f_rc * S * W * W) / denom;
+        const Tmax = Ts_F + dT;
+        const Qs = ((Math.PI * ps_psi * r * Math.pow(c_in, 3)) / (3.0 * mu_reyn * lPrime)) * (1.0 + 1.5 * rb.eps * rb.eps);
+        const f = rb.f_rc / rc;
+        const T_torque = f * W * r;
+        const H_gen = (2 * Math.PI * N_rps * T_torque * 3600) / (778.16 * 12);
+        const Q = rb.Q_rcNl * r * c_in * N_rps * (2 * lPrime);
+        const pmax = P / rb.P_pmax;
+
+        return {
+          S, P, mu_reyn, Tav, T1: Ts_F, dT, Tmax, Tb: null,
+          ...rb, h0: rb.h0_c * c_in, e: rb.eps * c_in, f,
+          T_torque, H_gen, H_loss: H_gen, Q, Qs, pmax, c: c_in, rc, ld: ldPrime
+        };
+      }
+
+      return null;
+    }
+
+    function evaluateBoundaryBushing() {
+      const matId = document.getElementById('bushingMatSelect').value;
+      const mat = TABLE_12_7_8.find(m => m.id === matId) || TABLE_12_7_8[4];
+      const d = Math.max(0.05, getInpIPS('inpD', 'len'));
+      const l = Math.max(0.05, getInpIPS('inpL', 'len'));
+      const F = Math.max(0.1, getInpIPS('inpW', 'force'));
+      const rpm = Math.max(0.1, parseFloat(document.getElementById('inpRPM').value) || 0);
+      const w_allow = Math.max(0.0001, getInpIPS('inpBoundWear', 'len'));
+      const Tinf_F = getInpIPS('inpBoundTinf', 'temp');
+      const f1 = parseFloat(document.getElementById('inpBoundF1').value) || 1.0;
+      const f2 = parseFloat(document.getElementById('inpBoundF2').value) || 1.0;
+      const A_in2 = Math.max(1.0, getInpIPS('inpBoundArea', 'area'));
+      const nd = Math.max(1.0, parseFloat(document.getElementById('inpBoundNd').value) || 1.0);
+
+      const P_nom = F / (d * l);
+      const P_max = (4.0 / Math.PI) * P_nom;
+      const V_fpm = (Math.PI * d * rpm) / 12.0;
+      const PV_nom = P_nom * V_fpm;
+      const PV_peak = P_max * V_fpm;
+
+      const K_val = mat.K * 1e-10;
+      const lifeHours = w_allow / (f1 * f2 * K_val * P_max * V_fpm);
+      const lifeCycles = lifeHours * 60.0 * rpm;
+
+      const A_ft2 = A_in2 / 144.0;
+      const H_gen_btuh = (mat.fs * F * V_fpm * 60.0) / 778.16;
+      const Tf_eq = Tinf_F + H_gen_btuh / (2.7 * A_ft2);
+
+      return {
+        mat, d, l, ld: l / d, F, rpm, V_fpm,
+        P_nom, P_max, PV_nom, PV_peak,
+        w_allow, f1, f2, lifeHours, lifeCycles,
+        Tf_eq, Tinf_F, H_gen_btuh, nd
+      };
+    }
+
+    // =========================================================================
+    // 5. BENCHMARK PRESETS & UI CONTROL HANDLERS
+    // =========================================================================
+    const PRESETS = {
+      si_turbine: {
+        label: 'SI Turbine Active: d = 80 mm, l = 60 mm, c = 0.060 mm, W = 6500 N, n = 3000 rpm, SAE 30, T₁ = 50 °C',
+        mode: 'fullfilm',
+        d: 80 / 25.4, l: 60 / 25.4, c: 0.060 / 25.4, W: 6500 / 4.4482216, Wst: 6500 / 4.4482216, rpm: 3000,
+        ffViscMode: 'iterative', grade: 'SAE30', directVisc: 4.0, T1: 122, nd: 2.0,
+        isoFit: 'manual', alloy: 'tin_thin', appNorm: 'steam_turbine'
+      },
+      ex12_1: {
+        label: 'Ex. 12-1..4 Active: W = 500 lbf (2224 N), 1800 rpm, d = l = 1.5 in (38.1 mm), c = 0.0015 in (38.1 µm), µ = 4 µreyn (27.6 mPa·s)',
+        mode: 'fullfilm',
+        d: 1.5, l: 1.5, c: 0.0015, W: 500, Wst: 500, rpm: 1800,
+        ffViscMode: 'direct', grade: 'SAE20', directVisc: 4.0, T1: 120, nd: 2.0,
+        isoFit: 'manual', alloy: 'tin_thin', appNorm: 'custom'
+      },
+      ex12_5: {
+        label: 'Ex. 12-5 Active: Self-Contained Pillow Block (W = 100 lbf / 445 N, 900 rpm, d = l = 2.0 in / 50.8 mm, SAE 20)',
+        mode: 'pillow',
+        d: 2.0, l: 2.0, c: 0.001, W: 100, Wst: 100, rpm: 900,
+        grade: 'SAE20', Tinf: 70, hCR: '2.7', lubeSys: 'ring', area: 40, alpha: 1.0,
+        isoFit: 'manual', alloy: 'leaded_brz', appNorm: 'custom'
+      },
+      ex12_6: {
+        label: 'Ex. 12-6 Active: Pressure-Fed Groove (W = 900 lbf / 4003 N, 3000 rpm, d = 1.75 in / 44.45 mm, l\' = 0.875 in / 22.23 mm)',
+        mode: 'groove',
+        d: 1.750, l: 0.875, c: 0.0015, W: 900, Wst: 900, rpm: 3000,
+        grade: 'SAE20', ps: 30, Ts: 120,
+        isoFit: 'manual', alloy: 'trimetal_88', appNorm: 'custom'
+      },
+      ex12_7: {
+        label: 'Ex. 12-7 Active: Boundary Oiles SP 500 (F = 700 lbf / 3114 N, d = l = 1.0 in / 25.4 mm, V = 0.168 m/s / 33 fpm)',
+        mode: 'boundary',
+        d: 1.0, l: 1.0, c: 0.002, W: 700, Wst: 700, rpm: 126.05,
+        bushingMat: 'oiles_500', wear: 0.005, Tinf: 70, f1: '1.0', f2: '1.0', area: 12, nd: 1.5,
+        isoFit: 'manual', appNorm: 'custom'
+      }
+    };
+
+    function loadPreset(key) {
+      const p = PRESETS[key];
+      if (!p) return;
+      state.activePreset = key;
+      setSolverMode(p.mode, true);
+
+      setInpFromIPS('inpD', p.d, 'len', state.unit === 'IPS' ? 4 : 3);
+      setInpFromIPS('inpL', p.l, 'len', state.unit === 'IPS' ? 4 : 3);
+      setInpFromIPS('inpC', p.c, 'len', state.unit === 'IPS' ? 5 : 4);
+      setInpFromIPS('inpW', p.W, 'force', 1);
+      setInpFromIPS('inpWst', p.Wst, 'force', 1);
+      document.getElementById('inpRPM').value = Number(p.rpm.toFixed(2));
+      document.getElementById('inpRevS').value = Number((p.rpm / 60).toFixed(3));
+      document.getElementById('isoFitSelect').value = p.isoFit || 'manual';
+      document.getElementById('appNormSelect').value = p.appNorm || 'custom';
+
+      if (p.alloy) {
+        state.selectedAlloy = p.alloy;
+        renderAlloyCards();
+      }
+
+      if (p.mode === 'fullfilm') {
+        document.getElementById('ffViscMode').value = p.ffViscMode;
+        onFfViscModeChange(true);
+        document.getElementById('ffOilGrade').value = p.grade;
+        setInpFromIPS('inpDirectVisc', p.directVisc, 'visc', 2);
+        setInpFromIPS('inpFfInletDirect', p.T1, 'temp', 1);
+        setInpFromIPS('inpFfInletIter', p.T1, 'temp', 1);
+        document.getElementById('inpNd').value = p.nd;
+      } else if (p.mode === 'pillow') {
+        document.getElementById('pbOilGrade').value = p.grade;
+        setInpFromIPS('inpPbTinf', p.Tinf, 'temp', 1);
+        document.getElementById('pbAirCond').value = p.hCR;
+        document.getElementById('pbLubeSys').value = p.lubeSys;
+        setInpFromIPS('inpPbArea', p.area, 'area', 1);
+        document.getElementById('inpPbAlpha').value = p.alpha;
+      } else if (p.mode === 'groove') {
+        document.getElementById('grOilGrade').value = p.grade;
+        setInpFromIPS('inpGrPs', p.ps, 'press', 2);
+        setInpFromIPS('inpGrTs', p.Ts, 'temp', 1);
+      } else if (p.mode === 'boundary') {
+        document.getElementById('bushingMatSelect').value = p.bushingMat;
+        setInpFromIPS('inpBoundWear', p.wear, 'len', state.unit === 'IPS' ? 5 : 4);
+        setInpFromIPS('inpBoundTinf', p.Tinf, 'temp', 1);
+        document.getElementById('inpBoundF1').value = p.f1;
+        document.getElementById('inpBoundF2').value = p.f2;
+        setInpFromIPS('inpBoundArea', p.area, 'area', 1);
+        document.getElementById('inpBoundNd').value = p.nd;
+      }
+
+      solveAll();
+    }
+
+    function setSolverMode(mode, skipSolve = false) {
+      state.mode = mode;
+      const modes = ['fullfilm', 'pillow', 'groove', 'boundary'];
+      modes.forEach(m => {
+        const tab = document.getElementById(`modeTab_${m}`);
+        const panel = document.getElementById(`panel_${m}`);
+        if (m === mode) {
+          tab.className = 'px-3.5 py-2 text-xs font-mono font-semibold rounded-t border-t border-x border-cad-border bg-cad-bg text-sky-400';
+          panel.classList.remove('hidden');
+        } else {
+          tab.className = 'px-3.5 py-2 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white';
+          panel.classList.add('hidden');
+        }
+      });
+
+      const isBound = mode === 'boundary';
+      document.getElementById('boxRadialClearance').classList.toggle('hidden', isBound);
+      document.getElementById('boxIsoFit').classList.toggle('hidden', isBound);
+      document.getElementById('isoStackStrip').classList.toggle('hidden', isBound);
+      document.getElementById('cardAlloySelector').classList.toggle('hidden', isBound);
+      document.getElementById('toleranceMatrixCard').classList.toggle('hidden', isBound);
+
+      document.getElementById('lblLength').innerHTML = mode === 'groove'
+        ? `Half-Bearing Length <i>l'</i> (<span class="u-len">${state.unit === 'IPS' ? 'in' : 'mm'}</span>)`
+        : `Bearing Length <i>l</i> (<span class="u-len">${state.unit === 'IPS' ? 'in' : 'mm'}</span>)`;
+
+      if (!skipSolve) solveAll();
+    }
+
+    function onFfViscModeChange(skipSolve = false) {
+      const vm = document.getElementById('ffViscMode').value;
+      document.getElementById('ffDirectViscRow').classList.toggle('hidden', vm !== 'direct');
+      document.getElementById('ffIterTempRow').classList.toggle('hidden', vm !== 'iterative');
+      if (!skipSolve) solveAll();
+    }
+
+    function onPbSystemChange() {
+      const air = parseFloat(document.getElementById('pbAirCond').value);
+      const sys = document.getElementById('pbLubeSys').value;
+      let alpha = 1.0;
+      if (sys === 'ring') alpha = air > 3.0 ? 1.5 : 1.0;
+      else alpha = air > 3.0 ? 0.75 : 0.3;
+      document.getElementById('inpPbAlpha').value = alpha;
+      solveAll();
+    }
+
+    function syncSpeed(source) {
+      if (source === 'rpm') {
+        const rpm = parseFloat(document.getElementById('inpRPM').value) || 0;
+        document.getElementById('inpRevS').value = Number((rpm / 60.0).toFixed(4));
+      } else {
+        const rps = parseFloat(document.getElementById('inpRevS').value) || 0;
+        document.getElementById('inpRPM').value = Number((rps * 60.0).toFixed(2));
+      }
+      solveAll();
+    }
+
+    function onGeometryInput() {
+      const fit = document.getElementById('isoFitSelect').value;
+      if (fit !== 'manual') {
+        const d_in = getInpIPS('inpD', 'len');
+        const stack = getIsoClearanceStack(d_in, fit);
+        setInpFromIPS('inpC', stack.cAvg, 'len', state.unit === 'IPS' ? 5 : 4);
+      }
+      solveAll();
+    }
+
+    function onIsoFitChange() {
+      const fit = document.getElementById('isoFitSelect').value;
+      if (fit !== 'manual') {
+        const d_in = getInpIPS('inpD', 'len');
+        const stack = getIsoClearanceStack(d_in, fit);
+        setInpFromIPS('inpC', stack.cAvg, 'len', state.unit === 'IPS' ? 5 : 4);
+      }
+      solveAll();
+    }
+
+    function onManualClearanceInput() {
+      document.getElementById('isoFitSelect').value = 'manual';
+      solveAll();
+    }
+
+    function switchSubTab(tab) {
+      const isDiag = tab === 'diagrams';
+      document.getElementById('subTab_diagrams').classList.toggle('hidden', !isDiag);
+      document.getElementById('subTab_equations').classList.toggle('hidden', isDiag);
+      document.getElementById('subTabBtn_diagrams').className = isDiag
+        ? 'px-3 py-1.5 text-xs font-mono font-semibold rounded-t border-t border-x border-cad-border bg-cad-card text-sky-400'
+        : 'px-3 py-1.5 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white';
+      document.getElementById('subTabBtn_equations').className = !isDiag
+        ? 'px-3 py-1.5 text-xs font-mono font-semibold rounded-t border-t border-x border-cad-border bg-cad-card text-sky-400'
+        : 'px-3 py-1.5 text-xs font-mono font-semibold rounded-t text-cad-muted hover:text-white';
+    }
+
+    function autoOptimizeBearing() {
+      if (state.mode === 'boundary') {
+        const d = getInpIPS('inpD', 'len');
+        const l = getInpIPS('inpL', 'len');
+        const F = getInpIPS('inpW', 'force');
+        const rpm = parseFloat(document.getElementById('inpRPM').value) || 100;
+        const P_nom = F / (d * l);
+        const P_max = (4 / Math.PI) * P_nom;
+        const V = Math.PI * d * rpm / 12;
+        const PV = P_nom * V;
+        let bestMat = TABLE_12_7_8[4];
+        let bestScore = Infinity;
+        TABLE_12_7_8.forEach(m => {
+          if (P_max <= m.maxP && PV <= m.maxPV && V <= m.maxV) {
+            if (m.K < bestScore) { bestScore = m.K; bestMat = m; }
+          }
+        });
+        document.getElementById('bushingMatSelect').value = bestMat.id;
+        solveAll();
+        showToast(`Auto-Optimized Boundary Bushing: Selected ${bestMat.name} (K = ${bestMat.K}×10⁻¹⁰).`);
+        return;
+      }
+
+      const d = Math.max(0.1, getInpIPS('inpD', 'len'));
+      const l = Math.max(0.1, getInpIPS('inpL', 'len'));
+      const W = Math.max(1, getInpIPS('inpW', 'force'));
+      const Wst = Math.max(0, getInpIPS('inpWst', 'force'));
+      const N_rps = Math.max(0.1, parseFloat(document.getElementById('inpRevS').value) || 30);
+      const nd = Math.max(1.0, parseFloat(document.getElementById('inpNd').value) || 2.0);
+      const h0_min_req = 0.0002 + 0.00004 * d;
+
+      const grades = Object.keys(TABLE_12_1);
+      const cCandidates = [];
+      for (let rc = 450; rc <= 1100; rc += 50) {
+        cCandidates.push((d / 2) / rc);
+      }
+
+      let best = null;
+      let minHgen = Infinity;
+
+      if (state.mode === 'fullfilm' && document.getElementById('ffViscMode').value === 'direct') {
+        document.getElementById('ffViscMode').value = 'iterative';
+        onFfViscModeChange(true);
+      }
+
+      grades.forEach(g => {
+        cCandidates.forEach(cTest => {
+          const params = collectHydroParams();
+          params.grade = g;
+          const res = evaluateHydroPoint(params, cTest);
+          const resDesign = evaluateHydroPoint({ ...params, W: W * nd }, cTest);
+          const pSt = Wst / (l * d);
+          const stableRatio = (res.mu_reyn * N_rps) / res.P;
+
+          const pass = (res.h0 >= h0_min_req) &&
+                       (res.Tmax <= 250.0) &&
+                       (pSt <= 300.0) &&
+                       (resDesign.h0 >= h0_min_req * 0.5) &&
+                       (stableRatio >= 1.7e-6) &&
+                       (res.eps >= 0.35);
+
+          if (pass && res.H_gen < minHgen) {
+            minHgen = res.H_gen;
+            best = { grade: g, c: cTest };
+          }
+        });
+      });
+
+      if (best) {
+        document.getElementById('isoFitSelect').value = 'manual';
+        setInpFromIPS('inpC', best.c, 'len', state.unit === 'IPS' ? 5 : 4);
+        if (state.mode === 'fullfilm') document.getElementById('ffOilGrade').value = best.grade;
+        if (state.mode === 'pillow') document.getElementById('pbOilGrade').value = best.grade;
+        if (state.mode === 'groove') document.getElementById('grOilGrade').value = best.grade;
+        solveAll();
+        showToast(`Auto-Optimize Converged: ${best.grade}, c = ${fmtVal(best.c, 'len', 5, 4)}, Friction Loss = ${fmtVal(minHgen, 'power')}.`);
+      } else {
+        showToast('No single-grade/clearance combo met all 6 Trumpler & stability gates at current load/geometry. Increase d or l.');
+      }
+    }
+
+    // =========================================================================
+    // 6. MASTER SOLVE & UI RENDERING PIPELINE
+    // =========================================================================
+    function collectHydroParams() {
+      const d = Math.max(0.05, getInpIPS('inpD', 'len'));
+      const l = Math.max(0.05, getInpIPS('inpL', 'len'));
+      const W = Math.max(0.1, getInpIPS('inpW', 'force'));
+      const N_rps = Math.max(0.05, parseFloat(document.getElementById('inpRevS').value) || 30);
+
+      let grade = 'SAE20';
+      if (state.mode === 'fullfilm') grade = document.getElementById('ffOilGrade').value;
+      if (state.mode === 'pillow') grade = document.getElementById('pbOilGrade').value;
+      if (state.mode === 'groove') grade = document.getElementById('grOilGrade').value;
+
+      return {
+        mode: state.mode,
+        d, l, W, N_rps, grade,
+        ffViscMode: document.getElementById('ffViscMode').value,
+        directViscReyn: getInpIPS('inpDirectVisc', 'visc') * 1e-6,
+        T1_F: document.getElementById('ffViscMode').value === 'direct'
+          ? getInpIPS('inpFfInletDirect', 'temp')
+          : getInpIPS('inpFfInletIter', 'temp'),
+        Tinf_F: getInpIPS('inpPbTinf', 'temp'),
+        hCR: parseFloat(document.getElementById('pbAirCond').value) || 2.7,
+        alpha: parseFloat(document.getElementById('inpPbAlpha').value) || 1.0,
+        A_in2: Math.max(1.0, getInpIPS('inpPbArea', 'area')),
+        ps_psi: Math.max(1.0, getInpIPS('inpGrPs', 'press')),
+        Ts_F: getInpIPS('inpGrTs', 'temp')
+      };
+    }
+
+    function solveAll() {
+      const d = Math.max(0.05, getInpIPS('inpD', 'len'));
+      const l = Math.max(0.05, getInpIPS('inpL', 'len'));
+      const ld = l / d;
+      document.getElementById('badgeLD').innerHTML = state.mode === 'groove'
+        ? `<i>l'</i>/<i>d</i> = ${ld.toFixed(3)}`
+        : `<i>l</i>/<i>d</i> = ${ld.toFixed(3)}`;
+      document.getElementById('outGrRatio').value = ld.toFixed(3);
+
+      const appKey = document.getElementById('appNormSelect').value;
+      const W = Math.max(0.1, getInpIPS('inpW', 'force'));
+      const P_curr = state.mode === 'groove' ? W / (2 * d * l) : W / (d * l);
+      if (appKey !== 'custom' && TABLE_12_5[appKey]) {
+        const norm = TABLE_12_5[appKey];
+        const inRange = P_curr >= norm.minPsi && P_curr <= norm.maxPsi;
+        document.getElementById('appNormReadout').innerHTML =
+          `Design <i>P</i> = <strong class="${inRange ? 'text-emerald-400' : 'text-amber-400'}">${fmtVal(P_curr, 'press', 1, 2)}</strong> (${fmtSecondary(P_curr, 'press')}) vs. Norm [${fmtVal(norm.minPsi, 'press', 0, 2)} – ${fmtVal(norm.maxPsi, 'press', 0, 2)}]`;
+      } else {
+        document.getElementById('appNormReadout').innerHTML = `Nominal Unit Load <i>P</i> = ${fmtVal(P_curr, 'press', 1, 2)} (${fmtSecondary(P_curr, 'press')})`;
+      }
+
+      if (state.mode === 'boundary') {
+        const bRes = evaluateBoundaryBushing();
+        state.lastResults = { type: 'boundary', bRes };
+        renderBoundaryKPIs(bRes);
+        renderBoundaryGates(bRes);
+        renderEquationBreakdownBoundary(bRes);
+        renderPolarDiagramBoundary(bRes);
+        renderSeiregChart(null);
+        renderManufacturingDrawing(d, l, 0.002, 'boundary', bRes);
+        updateBenchmarkBanner(bRes);
+        return;
+      }
+
+      const c_in = Math.max(0.0001, getInpIPS('inpC', 'len'));
+      const fit = document.getElementById('isoFitSelect').value;
+      const stack = fit === 'manual'
+        ? { cMin: c_in * 0.85, cAvg: c_in, cMax: c_in * 1.15 }
+        : getIsoClearanceStack(d, fit);
+
+      document.getElementById('isoCmin').textContent = fmtVal(stack.cMin, 'len', 5, 4);
+      document.getElementById('isoCavg').textContent = fmtVal(c_in, 'len', 5, 4);
+      document.getElementById('isoCmax').textContent = fmtVal(stack.cMax, 'len', 5, 4);
+
+      const rc = (d / 2) / c_in;
+      document.getElementById('badgeRC').innerHTML = `<i>r</i>/<i>c</i> = ${Math.round(rc)}`;
+
+      const params = collectHydroParams();
+      const resNom = evaluateHydroPoint(params, c_in);
+      const resMin = evaluateHydroPoint(params, stack.cMin);
+      const resMax = evaluateHydroPoint(params, stack.cMax);
+
+      const nd = Math.max(1.0, parseFloat(document.getElementById('inpNd').value) || 2.0);
+      const resDesign = evaluateHydroPoint({ ...params, W: params.W * nd }, c_in);
+
+      state.lastResults = { type: 'hydro', params, resNom, resMin, resMax, resDesign, stack };
+
+      renderHydroKPIs(resNom);
+      renderHydroGates(params, resNom, resDesign, nd);
+      renderToleranceMatrix(params, stack, resMin, resNom, resMax);
+      renderEquationBreakdownHydro(params, resNom, resDesign, nd);
+      renderPolarDiagramHydro(resNom);
+      renderSeiregChart(resNom, params.grade);
+      renderManufacturingDrawing(d, l, c_in, state.mode, resNom);
+      updateBenchmarkBanner(resNom);
+    }
+
+    // =========================================================================
+    // 7. KPI CARDS, TRUMPLER GATES & TOLERANCE TABLE RENDERERS (PROPER SUBSCRIPTS)
+    // =========================================================================
+    function renderHydroKPIs(r) {
+      const kpis = [
+        {
+          label: 'SOMMERFELD NO. <i>S</i>',
+          val: r.S.toFixed(4),
+          sub: `<i>ε</i> = ${r.eps.toFixed(3)} • <i>φ</i> = ${r.phi.toFixed(1)}°`,
+          accent: 'text-sky-400'
+        },
+        {
+          label: 'MIN FILM THICKNESS <i>h</i><sub>0</sub>',
+          val: fmtVal(r.h0, 'film'),
+          sub: `${fmtSecondary(r.h0, 'film')} • <i>h</i><sub>0</sub>/<i>c</i> = ${r.h0_c.toFixed(3)}`,
+          accent: 'text-emerald-400'
+        },
+        {
+          label: 'MAX FILM TEMP <i>T</i><sub>max</sub>',
+          val: fmtVal(r.Tmax, 'temp'),
+          sub: `${fmtSecondary(r.Tmax, 'temp')} • <i>T</i><sub>av</sub> = ${fmtVal(r.Tav, 'temp')}`,
+          accent: r.Tmax > 250 ? 'text-rose-400' : 'text-amber-400'
+        },
+        {
+          label: 'FRICTION & HEAT LOSS <i>H</i><sub>gen</sub>',
+          val: fmtVal(r.H_gen, 'power'),
+          sub: `${fmtSecondary(r.H_gen, 'power')} • <i>f</i> = ${r.f.toFixed(4)}`,
+          accent: 'text-slate-100'
+        },
+        {
+          label: 'UNIT LOAD <i>P</i> & PEAK <i>p</i><sub>max</sub>',
+          val: fmtVal(r.P, 'press', 1, 2),
+          sub: `${fmtSecondary(r.P, 'press')} • <i>p</i><sub>max</sub> = ${fmtVal(r.pmax, 'press', 0, 2)}`,
+          accent: 'text-sky-300'
+        },
+        {
+          label: 'TOTAL & SIDE FLOW <i>Q</i><sub>s</sub>',
+          val: fmtVal(r.Q, 'flow'),
+          sub: `Side <i>Q</i><sub>s</sub> = ${fmtVal(r.Qs, 'flow')} (${fmtSecondary(r.Qs, 'flow')})`,
+          accent: 'text-cyan-300'
+        },
+        {
+          label: 'EFFECTIVE VISCOSITY <i>µ</i>',
+          val: fmtVal(r.mu_reyn * 1e6, 'visc'),
+          sub: `${fmtSecondary(r.mu_reyn * 1e6, 'visc')} • Ends @ <i>θ</i><sub>p0</sub> = ${r.theta_p0.toFixed(1)}°`,
+          accent: 'text-purple-300'
+        },
+        {
+          label: r.Tb !== null ? 'HOUSING TEMP <i>T</i><sub>b</sub>' : 'INLET / SUPPLY TEMP <i>T</i><sub>1</sub>',
+          val: r.Tb !== null ? fmtVal(r.Tb, 'temp') : fmtVal(r.T1, 'temp'),
+          sub: r.Tb !== null
+            ? `${fmtSecondary(r.Tb, 'temp')} • Eq. 12-20 Housing`
+            : `${fmtSecondary(r.T1, 'temp')} • Δ<i>T</i> = ${fmtVal(r.dT, 'dtemp')}`,
+          accent: 'text-amber-300'
+        }
+      ];
+
+      document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+        <div class="bg-cad-card border border-cad-border rounded-lg p-2.5">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-cad-muted">${k.label}</div>
+          <div class="text-base font-mono font-bold ${k.accent} mt-0.5">${k.val}</div>
+          <div class="text-[11px] font-mono text-cad-muted mt-0.5 truncate">${k.sub}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderBoundaryKPIs(b) {
+      const kpis = [
+        {
+          label: 'PEAK UNIT LOAD <i>P</i><sub>max</sub>',
+          val: fmtVal(b.P_max, 'press', 1, 2),
+          sub: `${fmtSecondary(b.P_max, 'press')} • Nom <i>P</i> = ${fmtVal(b.P_nom, 'press', 1, 2)}`,
+          accent: b.P_max > b.mat.maxP ? 'text-rose-400' : 'text-sky-400'
+        },
+        {
+          label: 'OPERATING <i>PV</i> FACTOR',
+          val: fmtVal(b.PV_nom, 'pv'),
+          sub: `${fmtSecondary(b.PV_nom, 'pv')} • Lim = ${fmtVal(b.mat.maxPV, 'pv')}`,
+          accent: b.PV_nom > b.mat.maxPV ? 'text-rose-400' : 'text-emerald-400'
+        },
+        {
+          label: 'PREDICTED WEAR LIFE <i>t</i>',
+          val: `${Math.round(b.lifeHours).toLocaleString()} hr`,
+          sub: `${(b.lifeCycles / 1e6).toFixed(2)} × 10⁶ cycles (Eq. 12-32)`,
+          accent: 'text-amber-400'
+        },
+        {
+          label: 'EQUILIBRIUM TEMP <i>T</i><sub>f</sub>',
+          val: fmtVal(b.Tf_eq, 'temp'),
+          sub: `${fmtSecondary(b.Tf_eq, 'temp')} • Max = ${fmtVal(b.mat.maxT, 'temp')}`,
+          accent: b.Tf_eq > b.mat.maxT ? 'text-rose-400' : 'text-slate-100'
+        }
+      ];
+      document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+        <div class="bg-cad-card border border-cad-border rounded-lg p-2.5">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-cad-muted">${k.label}</div>
+          <div class="text-base font-mono font-bold ${k.accent} mt-0.5">${k.val}</div>
+          <div class="text-[11px] font-mono text-cad-muted mt-0.5 truncate">${k.sub}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderHydroGates(params, r, rDes, nd) {
+      const Wst = Math.max(0, getInpIPS('inpWst', 'force'));
+      const totalLen = params.mode === 'groove' ? 2 * params.l : params.l;
+      const pStart = Wst / (totalLen * params.d);
+      const h0Limit = 0.0002 + 0.00004 * params.d;
+      const stableParam = (r.mu_reyn * params.N_rps) / r.P;
+      const alloy = TABLE_12_6.find(a => a.id === state.selectedAlloy) || TABLE_12_6[1];
+
+      const gates = [
+        {
+          title: '1. Trumpler Min Film <i>h</i><sub>0</sub>',
+          val: `${fmtVal(r.h0, 'film')} (${fmtSecondary(r.h0, 'film')})`,
+          limit: `≥ ${fmtVal(h0Limit, 'film')} (5.08 + 0.04<i>d</i> µm)`,
+          pass: r.h0 >= h0Limit
+        },
+        {
+          title: '2. Trumpler Max Temp <i>T</i><sub>max</sub>',
+          val: `${fmtVal(r.Tmax, 'temp')} (${fmtSecondary(r.Tmax, 'temp')})`,
+          limit: `≤ ${fmtVal(250, 'temp')} (121.1 °C / 250 °F)`,
+          pass: r.Tmax <= 250.0
+        },
+        {
+          title: '3. Starting Unit Load <i>W</i><sub>st</sub>/<i>ld</i>',
+          val: `${fmtVal(pStart, 'press', 1, 2)} (${fmtSecondary(pStart, 'press')})`,
+          limit: `≤ ${fmtVal(300, 'press', 0, 2)} (2.07 MPa / 300 psi)`,
+          pass: pStart <= 300.0
+        },
+        {
+          title: `4. Overload Film @ <i>n</i><sub>d</sub> = ${nd.toFixed(1)}`,
+          val: `${fmtVal(rDes.h0, 'film')} (<i>ε</i><sub>des</sub> = ${rDes.eps.toFixed(2)})`,
+          limit: `≥ ${fmtVal(h0Limit * 0.5, 'film')} (No metal contact)`,
+          pass: rDes.h0 >= h0Limit * 0.5 && rDes.eps < 0.96
+        },
+        {
+          title: '5. Fig. 12-4 Stability <i>µN</i>/<i>P</i>',
+          val: `${(stableParam * 1e6).toFixed(2)}×10⁻⁶`,
+          limit: '≥ 1.70×10⁻⁶ reyn·r/s/psi',
+          pass: stableParam >= 1.7e-6
+        },
+        {
+          title: `6. ${alloy.name} <i>r</i>/<i>c</i> & Whirl`,
+          val: `<i>r</i>/<i>c</i> = ${Math.round(r.rc)}, <i>ε</i> = ${r.eps.toFixed(2)}`,
+          limit: `<i>r</i>/<i>c</i> ≥ ${alloy.rcMin} & <i>ε</i> ≥ 0.35`,
+          pass: r.rc >= alloy.rcMin && r.eps >= 0.35
+        }
+      ];
+
+      const allPass = gates.every(g => g.pass);
+      const badge = document.getElementById('overallGateBadge');
+      badge.textContent = allPass ? 'ALL 6 GATES PASSED' : 'DESIGN WARNINGS DETECTED';
+      badge.className = allPass
+        ? 'px-2 py-0.5 text-xs font-mono font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
+        : 'px-2 py-0.5 text-xs font-mono font-bold rounded bg-rose-500/15 text-rose-300 border border-rose-500/40';
+
+      document.getElementById('trumplerGatesGrid').innerHTML = gates.map(g => `
+        <div class="bg-cad-bg border ${g.pass ? 'border-emerald-500/30' : 'border-rose-500/50'} rounded px-2.5 py-2 flex items-start justify-between gap-2">
+          <div>
+            <div class="text-[11px] font-mono font-semibold text-slate-200">${g.title}</div>
+            <div class="text-xs font-mono font-bold ${g.pass ? 'text-emerald-400' : 'text-rose-400'} mt-0.5">${g.val}</div>
+            <div class="text-[10px] font-mono text-cad-muted mt-0.5">Req: ${g.limit}</div>
+          </div>
+          <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${g.pass ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+            ${g.pass ? 'PASS' : 'FAIL'}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    function renderBoundaryGates(b) {
+      const gates = [
+        { title: '1. Peak Pressure <i>P</i><sub>max</sub>', val: fmtVal(b.P_max, 'press', 1, 2), limit: `≤ ${fmtVal(b.mat.maxP, 'press', 0, 2)}`, pass: b.P_max <= b.mat.maxP },
+        { title: '2. Limiting <i>PV</i> Factor', val: fmtVal(b.PV_nom, 'pv'), limit: `≤ ${fmtVal(b.mat.maxPV, 'pv')}`, pass: b.PV_nom <= b.mat.maxPV },
+        { title: '3. Surface Velocity <i>V</i>', val: fmtVal(b.V_fpm, 'vel'), limit: `≤ ${fmtVal(b.mat.maxV, 'vel')}`, pass: b.V_fpm <= b.mat.maxV },
+        { title: '4. Equilibrium Temp <i>T</i><sub>f</sub>', val: fmtVal(b.Tf_eq, 'temp'), limit: `≤ ${fmtVal(b.mat.maxT, 'temp')}`, pass: b.Tf_eq <= b.mat.maxT },
+        { title: '5. Geometry Ratio <i>l</i>/<i>d</i>', val: b.ld.toFixed(2), limit: '0.50 ≤ <i>l</i>/<i>d</i> ≤ 2.00 (Eq. 12-33)', pass: b.ld >= 0.5 && b.ld <= 2.0 },
+        { title: '6. Design Factor <i>PV</i> Check', val: fmtVal(b.PV_nom * b.nd, 'pv'), limit: `≤ ${fmtVal(b.mat.maxPV, 'pv')} (<i>n</i><sub>d</sub>=${b.nd})`, pass: b.PV_nom * b.nd <= b.mat.maxPV }
+      ];
+      const allPass = gates.every(g => g.pass);
+      const badge = document.getElementById('overallGateBadge');
+      badge.textContent = allPass ? 'ALL BOUNDARY GATES PASSED' : 'BOUNDARY LIMIT EXCEEDED';
+      badge.className = allPass
+        ? 'px-2 py-0.5 text-xs font-mono font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
+        : 'px-2 py-0.5 text-xs font-mono font-bold rounded bg-rose-500/15 text-rose-300 border border-rose-500/40';
+
+      document.getElementById('trumplerGatesGrid').innerHTML = gates.map(g => `
+        <div class="bg-cad-bg border ${g.pass ? 'border-emerald-500/30' : 'border-rose-500/50'} rounded px-2.5 py-2 flex items-start justify-between gap-2">
+          <div>
+            <div class="text-[11px] font-mono font-semibold text-slate-200">${g.title}</div>
+            <div class="text-xs font-mono font-bold ${g.pass ? 'text-emerald-400' : 'text-rose-400'} mt-0.5">${g.val}</div>
+            <div class="text-[10px] font-mono text-cad-muted mt-0.5">Req: ${g.limit}</div>
+          </div>
+          <span class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${g.pass ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+            ${g.pass ? 'PASS' : 'FAIL'}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    function renderToleranceMatrix(params, stack, rMin, rNom, rMax) {
+      const h0Limit = 0.0002 + 0.00004 * params.d;
+      const rows = [
+        { name: '<i>c</i><sub>min</sub> (Tightest Bore / Largest Shaft)', r: rMin },
+        { name: '<i>c</i><sub>nom</sub> (Nominal Operating Point)', r: rNom },
+        { name: '<i>c</i><sub>max</sub> (Loosest Bore / Smallest Shaft)', r: rMax }
+      ];
+      document.getElementById('tolMatrixBody').innerHTML = rows.map(row => {
+        const ok = row.r.h0 >= h0Limit && row.r.Tmax <= 250.0;
+        return `
+          <tr>
+            <td class="px-2.5 py-1.5 text-slate-200">${row.name}</td>
+            <td class="px-2.5 py-1.5 text-sky-300">${fmtVal(row.r.c, 'len', 5, 4)}</td>
+            <td class="px-2.5 py-1.5">${row.r.S.toFixed(4)}</td>
+            <td class="px-2.5 py-1.5 ${row.r.h0 < h0Limit ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${fmtVal(row.r.h0, 'film')}</td>
+            <td class="px-2.5 py-1.5">${row.r.eps.toFixed(3)}</td>
+            <td class="px-2.5 py-1.5 ${row.r.Tmax > 250 ? 'text-rose-400 font-bold' : 'text-amber-300'}">${fmtVal(row.r.Tmax, 'temp')}</td>
+            <td class="px-2.5 py-1.5">${row.r.f.toFixed(4)}</td>
+            <td class="px-2.5 py-1.5">
+              <span class="px-1.5 py-0.5 text-[10px] rounded ${ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+                ${ok ? 'OK' : 'LIMIT'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateBenchmarkBanner(res) {
+      const barText = document.getElementById('benchmarkText');
+      const barDelta = document.getElementById('benchmarkDelta');
+      if (state.activePreset === 'si_turbine' && res.S !== undefined) {
+        barText.innerHTML = `SI Turbine Benchmark: <i>S</i> = ${res.S.toFixed(3)}, <i>h</i><sub>0</sub> = ${fmtVal(res.h0, 'film')}, <i>T</i><sub>max</sub> = ${fmtVal(res.Tmax, 'temp')}, <i>P</i> = ${fmtVal(res.P, 'press', 1, 2)}, <i>H</i><sub>gen</sub> = ${fmtVal(res.H_gen, 'power')}`;
+        barDelta.textContent = 'SI METRIC CALIBRATED';
+      } else if (state.activePreset === 'ex12_1' && res.S !== undefined) {
+        barText.innerHTML = `Ex. 12-1..4 Benchmark: <i>S</i> = ${res.S.toFixed(3)} (ref 0.135), <i>h</i><sub>0</sub> = ${res.h0.toFixed(5)}" / ${(res.h0 * 25400).toFixed(2)} µm (ref 0.00063"), <i>φ</i> = ${res.phi.toFixed(1)}° (ref 53°), <i>f</i> = ${res.f.toFixed(4)} (ref 0.0070)`;
+        barDelta.textContent = 'MATCHES SHIGLEY EX. 12-1..4';
+      } else if (state.activePreset === 'ex12_5' && res.Tav !== undefined) {
+        barText.innerHTML = `Ex. 12-5 Benchmark: <i>T</i><sub>f</sub> = ${res.Tav.toFixed(1)} °F / ${CONV.fToC(res.Tav).toFixed(1)} °C (ref 193.4 °F), <i>T</i><sub>b</sub> = ${res.Tb.toFixed(1)} °F / ${CONV.fToC(res.Tb).toFixed(1)} °C (ref 131.5 °F), <i>h</i><sub>0</sub> = ${res.h0.toFixed(5)}"`;
+        barDelta.textContent = 'MATCHES SHIGLEY EX. 12-5';
+      } else if (state.activePreset === 'ex12_6' && res.Tav !== undefined) {
+        barText.innerHTML = `Ex. 12-6 Benchmark: <i>T</i><sub>f</sub> = ${res.Tav.toFixed(1)} °F / ${CONV.fToC(res.Tav).toFixed(1)} °C (ref 168.5 °F), Δ<i>T</i> = ${res.dT.toFixed(1)} °F (ref 97.1 °F), <i>T</i><sub>max</sub> = ${res.Tmax.toFixed(1)} °F, <i>Q</i><sub>s</sub> = ${res.Qs.toFixed(3)} in³/s`;
+        barDelta.textContent = 'MATCHES SHIGLEY EX. 12-6';
+      } else if (state.activePreset === 'ex12_7' && res.P_max !== undefined) {
+        barText.innerHTML = `Ex. 12-7 Benchmark: <i>P</i><sub>max</sub> = ${Math.round(res.P_max)} psi / ${(res.P_max * CONV.psiToMPa).toFixed(2)} MPa (ref 891 psi), <i>PV</i> = ${Math.round(res.PV_nom).toLocaleString()} psi·fpm, Life <i>t</i> = ${Math.round(res.lifeHours).toLocaleString()} hr`;
+        barDelta.textContent = 'MATCHES SHIGLEY EX. 12-7';
+      }
+    }
+
+    // =========================================================================
+    // 8. FULL EQUATION BREAKDOWN RENDERER (PROPER HTML SUBSCRIPTS)
+    // =========================================================================
+    function renderEquationBreakdownHydro(params, r, rDes, nd) {
+      const blocks = [
+        {
+          title: '1. Geometry & Sommerfeld Number (Eqs. 12-7, 12-16)',
+          lines: [
+            `Journal Radius <i>r</i> = <i>d</i>/2 = ${fmtVal(params.d / 2, 'len', 4, 3)}`,
+            `Radial Clearance Ratio <i>r</i>/<i>c</i> = ${r.rc.toFixed(1)}`,
+            `Length-to-Diameter Ratio <i>l</i>/<i>d</i> = ${r.ld.toFixed(3)}`,
+            `Nominal Unit Load <i>P</i> = ${fmtVal(r.P, 'press', 2, 3)} (${fmtSecondary(r.P, 'press')})`,
+            `Sommerfeld Number <i>S</i> = (<i>r</i>/<i>c</i>)²(<i>µN</i>/<i>P</i>) = ${r.S.toFixed(5)}`
+          ]
+        },
+        {
+          title: '2. Raimondi & Boyd Film & Pressure Charts (Figs. 12-16..22)',
+          lines: [
+            `Minimum Film Ratio <i>h</i><sub>0</sub>/<i>c</i> = ${r.h0_c.toFixed(4)}  ⇒  <i>h</i><sub>0</sub> = ${fmtVal(r.h0, 'film')} (${fmtSecondary(r.h0, 'film')})`,
+            `Eccentricity Ratio <i>ε</i> = 1 − <i>h</i><sub>0</sub>/<i>c</i> = ${r.eps.toFixed(4)}  (<i>e</i> = ${fmtVal(r.e, 'film')})`,
+            `Attitude Angle <i>φ</i> = ${r.phi.toFixed(2)}°`,
+            `Maximum Film Pressure Ratio <i>P</i>/<i>p</i><sub>max</sub> = ${r.P_pmax.toFixed(4)}  ⇒  <i>p</i><sub>max</sub> = ${fmtVal(r.pmax, 'press', 1, 2)}`,
+            `Peak Pressure Angle <i>θ</i><sub>pmax</sub> = ${r.theta_pmax.toFixed(1)}°, Film End <i>θ</i><sub>p0</sub> = ${r.theta_p0.toFixed(1)}°`
+          ]
+        },
+        {
+          title: '3. Friction Torque, Power Loss & Oil Flow (Figs. 12-18..20)',
+          lines: [
+            `Friction Variable (<i>r</i>/<i>c</i>)<i>f</i> = ${r.f_rc.toFixed(4)}  ⇒  <i>f</i> = ${r.f.toFixed(5)}`,
+            `Friction Torque <i>T</i> = <i>f</i>·<i>W</i>·<i>r</i> = ${fmtVal(r.T_torque, 'torque')}`,
+            `Frictional Heat Rate <i>H</i><sub>gen</sub> = 2π·<i>N</i>·<i>T</i> = ${fmtVal(r.H_gen, 'power')} (${fmtSecondary(r.H_gen, 'power')})`,
+            `Flow Variable <i>Q</i>/(<i>r</i>·<i>c</i>·<i>N</i>·<i>l</i>) = ${r.Q_rcNl.toFixed(4)}  ⇒  <i>Q</i> = ${fmtVal(r.Q, 'flow')}`,
+            `Side Leakage Ratio <i>Q</i><sub>s</sub>/<i>Q</i> = ${r.Qs_Q.toFixed(4)}  ⇒  <i>Q</i><sub>s</sub> = ${fmtVal(r.Qs, 'flow')}`
+          ]
+        },
+        {
+          title: '4. Thermal Equilibrium & Overload Check (Sec. 12-7..11)',
+          lines: [
+            `Effective Viscosity <i>µ</i> = ${fmtVal(r.mu_reyn * 1e6, 'visc')} (${fmtSecondary(r.mu_reyn * 1e6, 'visc')}) [${params.grade}]`,
+            `Inlet / Sump Temp <i>T</i><sub>1</sub> = ${fmtVal(r.T1, 'temp')} (${fmtSecondary(r.T1, 'temp')})`,
+            `Film Temperature Rise Δ<i>T</i> = ${fmtVal(r.dT, 'dtemp')} (${fmtSecondary(r.dT, 'dtemp')})`,
+            `Average Film Temp <i>T</i><sub>av</sub> = ${fmtVal(r.Tav, 'temp')}, Max Temp <i>T</i><sub>max</sub> = ${fmtVal(r.Tmax, 'temp')}`,
+            `Overload Film @ <i>W</i><sub>des</sub> = ${nd}·<i>W</i>: <i>h</i><sub>0,des</sub> = ${fmtVal(rDes.h0, 'film')} (<i>ε</i><sub>des</sub> = ${rDes.eps.toFixed(3)})`
+          ]
+        }
+      ];
+
+      document.getElementById('equationBreakdownGrid').innerHTML = blocks.map(b => `
+        <div class="bg-cad-bg border border-cad-border rounded-lg p-3 space-y-1.5">
+          <div class="text-sky-400 font-bold border-b border-cad-border pb-1">${b.title}</div>
+          ${b.lines.map(l => `<div class="text-slate-300 leading-relaxed">${l}</div>`).join('')}
+        </div>
+      `).join('');
+    }
+
+    function renderEquationBreakdownBoundary(b) {
+      const blocks = [
+        {
+          title: '1. Projected & Peak Cosine Pressure (Eqs. 12-30, 12-31)',
+          lines: [
+            `Material: ${b.mat.name} (Max <i>P</i> = ${fmtVal(b.mat.maxP, 'press', 0, 2)}, Max <i>PV</i> = ${fmtVal(b.mat.maxPV, 'pv')})`,
+            `Nominal Projected Load <i>P</i> = <i>F</i>/(<i>d</i>·<i>l</i>) = ${fmtVal(b.P_nom, 'press', 1, 2)}`,
+            `Peak Cosine Load <i>P</i><sub>max</sub> = (4/π)·<i>P</i> = ${fmtVal(b.P_max, 'press', 1, 2)}`,
+            `Sliding Surface Speed <i>V</i> = π·<i>d</i>·<i>n</i>/12 = ${fmtVal(b.V_fpm, 'vel')}`,
+            `Nominal <i>PV</i> = <i>P</i>·<i>V</i> = ${fmtVal(b.PV_nom, 'pv')} (${fmtSecondary(b.PV_nom, 'pv')})`
+          ]
+        },
+        {
+          title: '2. Linear Wear Life & Equilibrium Temp (Eqs. 12-32, 12-38)',
+          lines: [
+            `Wear Factor <i>K</i> = ${b.mat.K} × 10⁻¹⁰ in³·min/(lbf·ft·h)`,
+            `Correction Factors: Motion <i>f</i><sub>1</sub> = ${b.f1.toFixed(1)}, Env <i>f</i><sub>2</sub> = ${b.f2.toFixed(1)}`,
+            `Wear Life <i>t</i> = <i>w</i> / (<i>f</i><sub>1</sub>·<i>f</i><sub>2</sub>·<i>K</i>·<i>P</i><sub>max</sub>·<i>V</i>) = ${Math.round(b.lifeHours).toLocaleString()} hours`,
+            `Total Operating Cycles = ${(b.lifeCycles / 1e6).toFixed(2)} × 10⁶ revolutions`,
+            `Equilibrium Temp <i>T</i><sub>f</sub> = <i>T</i><sub>∞</sub> + (<i>f</i><sub>s</sub>·<i>F</i>·<i>V</i>)/(<i>J</i>·<i>h</i><sub>CR</sub>·<i>A</i>) = ${fmtVal(b.Tf_eq, 'temp')}`
+          ]
+        }
+      ];
+      document.getElementById('equationBreakdownGrid').innerHTML = blocks.map(blk => `
+        <div class="bg-cad-bg border border-cad-border rounded-lg p-3 space-y-1.5">
+          <div class="text-purple-400 font-bold border-b border-cad-border pb-1">${blk.title}</div>
+          ${blk.lines.map(l => `<div class="text-slate-300 leading-relaxed">${l}</div>`).join('')}
+        </div>
+      `).join('');
+    }
+
+    // =========================================================================
+    // 9. STATIC SVG TECHNICAL DRAWINGS (PROPER SVG <tspan> SUBSCRIPTS)
+    // =========================================================================
+    function renderPolarDiagramHydro(r) {
+      const svg = document.getElementById('svgPolar');
+      const cx = 210, cy = 175;
+      const Rbore = 96;
+      const Rjournal = 72;
+      const c_px = Rbore - Rjournal;
+      const e_px = r.eps * c_px;
+
+      const phiRad = (r.phi * Math.PI) / 180.0;
+      const jx = cx + e_px * Math.sin(phiRad);
+      const jy = cy + e_px * Math.cos(phiRad);
+
+      const h0BoreX = cx + Rbore * Math.sin(phiRad);
+      const h0BoreY = cy + Rbore * Math.cos(phiRad);
+      const h0JourX = jx + Rjournal * Math.sin(phiRad);
+      const h0JourY = jy + Rjournal * Math.cos(phiRad);
+
+      let pressurePts = [];
+      const steps = 40;
+      for (let i = 0; i <= steps; i++) {
+        const frac = i / steps;
+        const thetaDeg = frac * r.theta_p0;
+        let pNorm = 0;
+        if (thetaDeg <= r.theta_pmax) {
+          pNorm = Math.sin((thetaDeg / Math.max(1, r.theta_pmax)) * (Math.PI / 2));
+        } else {
+          const span = Math.max(1, r.theta_p0 - r.theta_pmax);
+          pNorm = Math.cos(((thetaDeg - r.theta_pmax) / span) * (Math.PI / 2));
+        }
+        pNorm = Math.max(0, Math.pow(pNorm, 1.15));
+        const rEnv = Rbore + pNorm * 46;
+        const svgAng = (Math.PI / 2 - phiRad) + (thetaDeg * Math.PI) / 180.0;
+        const px = cx + rEnv * Math.cos(svgAng);
+        const py = cy + rEnv * Math.sin(svgAng);
+        pressurePts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+      }
+      for (let i = steps; i >= 0; i--) {
+        const frac = i / steps;
+        const thetaDeg = frac * r.theta_p0;
+        const svgAng = (Math.PI / 2 - phiRad) + (thetaDeg * Math.PI) / 180.0;
+        const px = cx + Rbore * Math.cos(svgAng);
+        const py = cy + Rbore * Math.sin(svgAng);
+        pressurePts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+      }
+
+      svg.innerHTML = `
+        <line x1="25" y1="${cy}" x2="395" y2="${cy}" stroke="#334155" stroke-width="1" stroke-dasharray="6,4" />
+        <line x1="${cx}" y1="20" x2="${cx}" y2="325" stroke="#334155" stroke-width="1" stroke-dasharray="6,4" />
+
+        <polygon points="${pressurePts.join(' ')}" fill="rgba(56, 189, 248, 0.22)" stroke="#38bdf8" stroke-width="1.5" />
+
+        <circle cx="${cx}" cy="${cy}" r="${Rbore}" fill="rgba(15, 23, 42, 0.55)" stroke="#94a3b8" stroke-width="2.5" />
+        <circle cx="${cx}" cy="${cy}" r="${Rbore + 8}" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="3,3" />
+
+        <circle cx="${jx.toFixed(1)}" cy="${jy.toFixed(1)}" r="${Rjournal}" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
+
+        <line x1="${cx}" y1="${cy}" x2="${h0BoreX.toFixed(1)}" y2="${h0BoreY.toFixed(1)}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4,2" />
+        <line x1="${h0JourX.toFixed(1)}" y1="${h0JourY.toFixed(1)}" x2="${h0BoreX.toFixed(1)}" y2="${h0BoreY.toFixed(1)}" stroke="#10b981" stroke-width="3" />
+
+        <circle cx="${cx}" cy="${cy}" r="3" fill="#38bdf8" />
+        <circle cx="${jx.toFixed(1)}" cy="${jy.toFixed(1)}" r="3" fill="#f59e0b" />
+        <text x="${cx - 14}" y="${cy - 6}" fill="#38bdf8" font-family="JetBrains Mono" font-size="11" font-weight="bold">O</text>
+        <text x="${(jx + 6).toFixed(1)}" y="${(jy - 5).toFixed(1)}" fill="#f59e0b" font-family="JetBrains Mono" font-size="11" font-weight="bold">O'</text>
+
+        <line x1="${jx.toFixed(1)}" y1="${(jy - 45).toFixed(1)}" x2="${jx.toFixed(1)}" y2="${(jy - 8).toFixed(1)}" stroke="#f43f5e" stroke-width="2.5" />
+        <polygon points="${jx.toFixed(1)},${(jy - 4).toFixed(1)} ${(jx - 5).toFixed(1)},${(jy - 13).toFixed(1)} ${(jx + 5).toFixed(1)},${(jy - 13).toFixed(1)}" fill="#f43f5e" />
+        <text x="${(jx + 8).toFixed(1)}" y="${(jy - 34).toFixed(1)}" fill="#f43f5e" font-family="JetBrains Mono" font-size="11" font-weight="bold">W</text>
+
+        <path d="M ${(jx - 32).toFixed(1)} ${(jy - 18).toFixed(1)} A 36 36 0 0 0 ${(jx - 32).toFixed(1)} ${(jy + 18).toFixed(1)}" fill="none" stroke="#e2e8f0" stroke-width="1.5" />
+        <polygon points="${(jx - 32).toFixed(1)},${(jy + 22).toFixed(1)} ${(jx - 37).toFixed(1)},${(jy + 14).toFixed(1)} ${(jx - 27).toFixed(1)},${(jy + 14).toFixed(1)}" fill="#e2e8f0" />
+        <text x="${(jx - 52).toFixed(1)}" y="${(jy + 4).toFixed(1)}" fill="#e2e8f0" font-family="JetBrains Mono" font-size="10">N</text>
+
+        <text x="12" y="22" fill="#10b981" font-family="JetBrains Mono" font-size="11" font-weight="bold">
+          h<tspan dy="3" font-size="8.5">0</tspan><tspan dy="-3"> = ${fmtVal(r.h0, 'film')}</tspan>
+        </text>
+        <text x="12" y="38" fill="#f59e0b" font-family="JetBrains Mono" font-size="11">
+          ε = ${r.eps.toFixed(3)} • φ = ${r.phi.toFixed(1)}°
+        </text>
+        <text x="12" y="328" fill="#38bdf8" font-family="JetBrains Mono" font-size="11">
+          p<tspan dy="3" font-size="8.5">max</tspan><tspan dy="-3"> = ${fmtVal(r.pmax, 'press', 0, 2)} @ θ</tspan><tspan dy="3" font-size="8.5">pmax</tspan><tspan dy="-3"> = ${r.theta_pmax.toFixed(1)}°</tspan>
+        </text>
+      `;
+    }
+
+    function renderPolarDiagramBoundary(b) {
+      const svg = document.getElementById('svgPolar');
+      const cx = 210, cy = 175;
+      svg.innerHTML = `
+        <line x1="25" y1="${cy}" x2="395" y2="${cy}" stroke="#334155" stroke-width="1" stroke-dasharray="6,4" />
+        <line x1="${cx}" y1="20" x2="${cx}" y2="325" stroke="#334155" stroke-width="1" stroke-dasharray="6,4" />
+        <circle cx="${cx}" cy="${cy}" r="94" fill="rgba(168, 85, 247, 0.14)" stroke="#a855f7" stroke-width="3" />
+        <circle cx="${cx}" cy="${cy + 4}" r="76" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
+        <path d="M ${cx - 88} ${cy + 32} Q ${cx} ${cy + 145} ${cx + 88} ${cy + 32}" fill="rgba(244, 63, 94, 0.25)" stroke="#f43f5e" stroke-width="2" />
+        <line x1="${cx}" y1="${cy - 45}" x2="${cx}" y2="${cy - 6}" stroke="#f43f5e" stroke-width="2.5" />
+        <polygon points="${cx},${cy - 2} ${cx - 5},${cy - 11} ${cx + 5},${cy - 11}" fill="#f43f5e" />
+        <text x="${cx + 8}" y="${cy - 30}" fill="#f43f5e" font-family="JetBrains Mono" font-size="11" font-weight="bold">F = ${fmtVal(b.F, 'force', 0, 0)}</text>
+        <text x="12" y="22" fill="#a855f7" font-family="JetBrains Mono" font-size="11" font-weight="bold">BOUNDARY CONTACT (EQ. 12-31)</text>
+        <text x="12" y="38" fill="#f43f5e" font-family="JetBrains Mono" font-size="11">
+          P<tspan dy="3" font-size="8.5">max</tspan><tspan dy="-3"> = (4/π)F/(dl) = ${fmtVal(b.P_max, 'press', 1, 2)}</tspan>
+        </text>
+        <text x="12" y="328" fill="#10b981" font-family="JetBrains Mono" font-size="11">Wear Life t = ${Math.round(b.lifeHours).toLocaleString()} hr (w = ${fmtVal(b.w_allow, 'len', 4, 3)})</text>
+      `;
+    }
+
+    function renderSeiregChart(resNom, activeGrade) {
+      const svg = document.getElementById('svgSeireg');
+      const padL = 52, padR = 18, padT = 22, padB = 38;
+      const w = 420 - padL - padR;
+      const h = 340 - padT - padB;
+
+      const tMin = 80, tMax = 260;
+      const logMin = Math.log10(0.3), logMax = Math.log10(40.0);
+
+      const xMap = (tF) => padL + ((tF - tMin) / (tMax - tMin)) * w;
+      const yMap = (muUreyn) => {
+        const lv = Math.max(logMin, Math.min(logMax, Math.log10(muUreyn)));
+        return padT + h - ((lv - logMin) / (logMax - logMin)) * h;
+      };
+
+      let gridHtml = '';
+      [0.5, 1, 2, 5, 10, 20, 40].forEach(v => {
+        const y = yMap(v);
+        const label = state.unit === 'IPS' ? v.toString() : (v * 6.895).toFixed(0);
+        gridHtml += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + w}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-width="1" />`;
+        gridHtml += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" fill="#94a3b8" font-family="JetBrains Mono" font-size="10">${label}</text>`;
+      });
+
+      [80, 120, 160, 200, 240].forEach(tF => {
+        const x = xMap(tF);
+        const label = state.unit === 'IPS' ? `${tF}°F` : `${Math.round(CONV.fToC(tF))}°C`;
+        gridHtml += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${padT + h}" stroke="#1e293b" stroke-width="1" />`;
+        gridHtml += `<text x="${x.toFixed(1)}" y="${padT + h + 15}" text-anchor="middle" fill="#94a3b8" font-family="JetBrains Mono" font-size="10">${label}</text>`;
+      });
+
+      let curvesHtml = '';
+      Object.entries(TABLE_12_1).forEach(([key, oil]) => {
+        let pts = [];
+        for (let tF = tMin; tF <= tMax; tF += 5) {
+          const muUreyn = evalSeiregViscosityReyn(key, tF) * 1e6;
+          pts.push(`${xMap(tF).toFixed(1)},${yMap(muUreyn).toFixed(1)}`);
+        }
+        const isSel = key === activeGrade;
+        curvesHtml += `<polyline points="${pts.join(' ')}" fill="none" stroke="${oil.color}" stroke-width="${isSel ? 2.6 : 1.2}" opacity="${isSel ? 1.0 : 0.45}" />`;
+        const endMu = evalSeiregViscosityReyn(key, 248) * 1e6;
+        curvesHtml += `<text x="${xMap(248) - 4}" y="${yMap(endMu) - 3}" fill="${oil.color}" font-family="JetBrains Mono" font-size="9" font-weight="${isSel ? 'bold' : 'normal'}">${oil.name}</text>`;
+      });
+
+      let opHtml = '';
+      if (resNom && resNom.Tav && resNom.mu_reyn) {
+        const cx = xMap(Math.max(tMin, Math.min(tMax, resNom.Tav)));
+        const cy = yMap(resNom.mu_reyn * 1e6);
+        opHtml = `
+          <line x1="${padL}" y1="${cy.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#f8fafc" stroke-width="1" stroke-dasharray="3,3" />
+          <line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${padT + h}" stroke="#f8fafc" stroke-width="1" stroke-dasharray="3,3" />
+          <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" fill="#f59e0b" stroke="#0b0f17" stroke-width="1.5" />
+          <text x="${Math.min(padL + w - 105, cx + 8).toFixed(1)}" y="${Math.max(padT + 14, cy - 8).toFixed(1)}" fill="#f8fafc" font-family="JetBrains Mono" font-size="10" font-weight="bold">
+            (${fmtVal(resNom.Tav, 'temp')}, ${fmtVal(resNom.mu_reyn * 1e6, 'visc')})
+          </text>
+        `;
+      }
+
+      svg.innerHTML = `
+        <rect x="${padL}" y="${padT}" width="${w}" height="${h}" fill="#0b0f17" stroke="#334155" stroke-width="1" />
+        ${gridHtml}
+        ${curvesHtml}
+        ${opHtml}
+        <text x="14" y="${padT + h / 2}" transform="rotate(-90, 14, ${padT + h / 2})" text-anchor="middle" fill="#cbd5e1" font-family="JetBrains Mono" font-size="10">
+          Viscosity µ (${state.unit === 'IPS' ? 'µreyn' : 'mPa·s'})
+        </text>
+      `;
+    }
+
+    function renderManufacturingDrawing(d_in, l_in, c_in, mode, res) {
+      const svg = document.getElementById('svgManufacturing');
+      const isGroove = mode === 'groove';
+      const alloy = TABLE_12_6.find(a => a.id === state.selectedAlloy) || TABLE_12_6[1];
+      const fit = document.getElementById('isoFitSelect').value;
+      const thickStr = state.unit === 'SI' ? alloy.thickMm : alloy.thickIn;
+
+      const grooveSvg = isGroove ? `
+        <rect x="274" y="42" width="12" height="14" fill="#0b0f17" stroke="#38bdf8" stroke-width="1.5" />
+        <rect x="274" y="154" width="12" height="14" fill="#0b0f17" stroke="#38bdf8" stroke-width="1.5" />
+        <line x1="280" y1="16" x2="280" y2="42" stroke="#38bdf8" stroke-width="3" />
+        <text x="292" y="28" fill="#38bdf8" font-family="JetBrains Mono" font-size="10" font-weight="bold">
+          SUPPLY p<tspan dy="3" font-size="8">s</tspan><tspan dy="-3"> (${fmtVal(getInpIPS('inpGrPs', 'press'), 'press', 0, 2)})</tspan>
+        </text>
+        <text x="215" y="196" fill="#10b981" font-family="JetBrains Mono" font-size="10">l' = ${fmtVal(l_in, 'len', 3, 2)}</text>
+        <text x="315" y="196" fill="#10b981" font-family="JetBrains Mono" font-size="10">l' = ${fmtVal(l_in, 'len', 3, 2)}</text>
+      ` : `
+        <text x="280" y="196" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono" font-size="11" font-weight="bold">EFFECTIVE LENGTH l = ${fmtVal(l_in, 'len', 3, 2)}</text>
+      `;
+
+      svg.innerHTML = `
+        <rect x="170" y="34" width="220" height="22" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5" />
+        <rect x="170" y="154" width="220" height="22" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5" />
+
+        <rect x="170" y="52" width="220" height="4" fill="#38bdf8" />
+        <rect x="170" y="154" width="220" height="4" fill="#38bdf8" />
+
+        <rect x="115" y="61" width="330" height="88" fill="#0f172a" stroke="#f59e0b" stroke-width="2" />
+        <line x1="95" y1="105" x2="465" y2="105" stroke="#475569" stroke-width="1" stroke-dasharray="8,4" />
+
+        <line x1="170" y1="180" x2="390" y2="180" stroke="#10b981" stroke-width="1.2" />
+        <line x1="170" y1="174" x2="170" y2="186" stroke="#10b981" stroke-width="1.2" />
+        <line x1="390" y1="174" x2="390" y2="186" stroke="#10b981" stroke-width="1.2" />
+
+        <line x1="138" y1="61" x2="138" y2="149" stroke="#f59e0b" stroke-width="1.2" />
+        <text x="130" y="109" text-anchor="end" fill="#f59e0b" font-family="JetBrains Mono" font-size="11" font-weight="bold">Ø d = ${fmtVal(d_in, 'len', 3, 2)}</text>
+
+        ${grooveSvg}
+
+        <rect x="495" y="18" width="368" height="178" rx="6" fill="#111827" stroke="#334155" stroke-width="1.5" />
+        <text x="510" y="38" fill="#38bdf8" font-family="JetBrains Mono" font-size="11" font-weight="bold">MANUFACTURING & TOLERANCE SPEC</text>
+        <line x1="495" y1="46" x2="863" y2="46" stroke="#1e293b" stroke-width="1" />
+
+        <text x="510" y="66" fill="#cbd5e1" font-family="JetBrains Mono" font-size="11">• ISO Fit Class: ${fit === 'manual' ? 'Custom Radial c' : fit}</text>
+        <text x="510" y="84" fill="#cbd5e1" font-family="JetBrains Mono" font-size="11">• Nominal Clearance c: ${fmtVal(c_in, 'len', 5, 4)}</text>
+        <text x="510" y="102" fill="#cbd5e1" font-family="JetBrains Mono" font-size="11">• Lining Alloy: ${alloy.name} (${alloy.sae})</text>
+        <text x="510" y="120" fill="#cbd5e1" font-family="JetBrains Mono" font-size="11">• Lining Thickness: ${thickStr} | Min r/c: ${alloy.rcMin}</text>
+        <text x="510" y="138" fill="#cbd5e1" font-family="JetBrains Mono" font-size="11">• Surface Finish: Journal ≤ 0.4 µm Ra, Bore ≤ 0.8 µm Ra</text>
+        <text x="510" y="156" fill="#10b981" font-family="JetBrains Mono" font-size="11">• Oil Groove: ${isGroove ? 'Central Circumferential (Fig. 12-27)' : 'Single Axial Inlet Hole (Unloaded Zone)'}</text>
+        <text x="510" y="178" fill="#94a3b8" font-family="JetBrains Mono" font-size="10">REF: SHIGLEY'S MECHANICAL ENGINEERING DESIGN, 9TH ED., CH. 12</text>
+      `;
+    }
+
+    // =========================================================================
+    // 10. INITIALIZE SELECTORS, EXPORT REPORT & BOOTSTRAP
+    // =========================================================================
+    function renderAlloyCards() {
+      const grid = document.getElementById('alloyCardsGrid');
+      grid.innerHTML = TABLE_12_6.map(a => {
+        const sel = a.id === state.selectedAlloy;
+        const thick = state.unit === 'SI' ? a.thickMm : a.thickIn;
+        return `
+          <button type="button" onclick="selectAlloy('${a.id}')" class="text-left p-2 rounded border ${sel ? 'bg-sky-950/50 border-sky-400 text-white' : 'bg-cad-bg border-cad-border text-slate-300 hover:border-slate-600'}">
+            <div class="flex items-center justify-between font-mono text-[11px] font-bold">
+              <span>${a.name}</span>
+              <span class="text-sky-400">${a.sae}</span>
+            </div>
+            <div class="font-mono text-[10px] text-cad-muted mt-0.5">
+              t = ${thick} • <i>r</i>/<i>c</i>: ${a.rcMin}–${a.rcMax} • Cap: ${a.capIdx}×
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectAlloy(id) {
+      state.selectedAlloy = id;
+      renderAlloyCards();
+      solveAll();
+    }
+
+    function populateBushingMaterials() {
+      const sel = document.getElementById('bushingMatSelect');
+      sel.innerHTML = TABLE_12_7_8.map(m => {
+        const pvSI = (m.maxPV * CONV.psiToMPa * CONV.fpmToMs).toFixed(2);
+        return `<option value="${m.id}">${m.name} (PV_lim = ${pvSI} MPa·m/s | ${m.maxPV.toLocaleString()} psi·fpm)</option>`;
+      }).join('');
+      sel.value = 'oiles_500';
+    }
+
+    function showToast(msg) {
+      const b = document.getElementById('toastBanner');
+      document.getElementById('toastText').textContent = msg;
+      b.classList.remove('hidden');
+    }
+
+    function copyReportToClipboard() {
+      if (!state.lastResults) return;
+      let lines = [
+        '====================================================================',
+        'SHIGLEY CH. 12 — JOURNAL BEARING ENGINEERING CALCULATION REPORT',
+        `Unit System: ${state.unit} | Solver Mode: ${state.mode.toUpperCase()}`,
+        '===================================================================='
+      ];
+      if (state.lastResults.type === 'hydro') {
+        const { params, resNom } = state.lastResults;
+        lines.push(
+          `Diameter d = ${fmtVal(params.d, 'len', 4, 3)}, Length l = ${fmtVal(params.l, 'len', 4, 3)}, Clearance c = ${fmtVal(resNom.c, 'len', 5, 4)}`,
+          `Load W = ${fmtVal(params.W, 'force', 1, 1)}, Speed = ${document.getElementById('inpRPM').value} rpm (${params.N_rps} rev/s)`,
+          `Unit Load P = ${fmtVal(resNom.P, 'press', 2, 3)}, Peak Film Pressure p_max = ${fmtVal(resNom.pmax, 'press', 1, 2)}`,
+          `Sommerfeld Number S = ${resNom.S.toFixed(5)}, Eccentricity ε = ${resNom.eps.toFixed(4)}, Attitude φ = ${resNom.phi.toFixed(2)}°`,
+          `Minimum Film Thickness h0 = ${fmtVal(resNom.h0, 'film')} (Trumpler Limit = ${fmtVal(0.0002 + 0.00004 * params.d, 'film')})`,
+          `Friction Coeff f = ${resNom.f.toFixed(5)}, Friction Torque T = ${fmtVal(resNom.T_torque, 'torque')}, Heat Loss = ${fmtVal(resNom.H_gen, 'power')}`,
+          `Total Flow Q = ${fmtVal(resNom.Q, 'flow')}, Side Leakage Qs = ${fmtVal(resNom.Qs, 'flow')}`,
+          `Temperatures: T1 = ${fmtVal(resNom.T1, 'temp')}, dT = ${fmtVal(resNom.dT, 'dtemp')}, Tav = ${fmtVal(resNom.Tav, 'temp')}, Tmax = ${fmtVal(resNom.Tmax, 'temp')}`
+        );
+      } else {
+        const { bRes } = state.lastResults;
+        lines.push(
+          `Material: ${bRes.mat.name} (K = ${bRes.mat.K}e-10)`,
+          `Diameter d = ${fmtVal(bRes.d, 'len', 4, 3)}, Length l = ${fmtVal(bRes.l, 'len', 4, 3)}, Load F = ${fmtVal(bRes.F, 'force', 1, 1)}`,
+          `Nominal P = ${fmtVal(bRes.P_nom, 'press', 1, 2)}, Peak P_max = ${fmtVal(bRes.P_max, 'press', 1, 2)}, PV = ${fmtVal(bRes.PV_nom, 'pv')}`,
+          `Predicted Wear Life t = ${Math.round(bRes.lifeHours).toLocaleString()} hr (${(bRes.lifeCycles / 1e6).toFixed(2)}M cycles)`,
+          `Equilibrium Temp Tf = ${fmtVal(bRes.Tf_eq, 'temp')}`
+        );
+      }
+
+      const ta = document.createElement('textarea');
+      ta.value = lines.join('\n');
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Complete Shigley Ch. 12 engineering report copied to clipboard.');
+    }
+
+    function downloadJSONSpec() {
+      if (!state.lastResults) return;
+      const blob = new Blob([JSON.stringify(state.lastResults, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shigley_bearing_${state.mode}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Exported shigley_bearing_${state.mode}.json.`);
+    }
+
+    window.onload = function () {
+      renderAlloyCards();
+      populateBushingMaterials();
+      loadPreset('si_turbine');
+    };
+  </script>
+</body>
+</html>
